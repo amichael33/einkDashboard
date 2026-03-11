@@ -67,9 +67,21 @@ def get_week_bounds():
 
 def fetch_notion_db(db_id, payload):
     url = f"https://api.notion.com/v1/databases/{db_id}/query"
-    resp = requests.post(url, headers=NOTION_HEADERS, json=payload, timeout=10)
-    resp.raise_for_status()
-    return resp.json().get("results", [])
+    all_results = []
+    cursor = None
+    while True:
+        body = {**payload}
+        if cursor:
+            body["start_cursor"] = cursor
+        resp = requests.post(url, headers=NOTION_HEADERS, json=body, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        all_results.extend(data.get("results", []))
+        if data.get("has_more"):
+            cursor = data.get("next_cursor")
+        else:
+            break
+    return all_results
 
 def parse_notion_date(date_str):
     """Parse a Notion date string (date or datetime with timezone) to a date object."""
@@ -119,8 +131,6 @@ def fetch_tasks():
         eisen_prop = props.get("Eisenhower Status", {})
         formula = eisen_prop.get("formula", {})
         eisen_text = formula.get("string", "") or ""
-        name_debug = "".join(t.get("plain_text", "") for t in props.get("Name", {}).get("title", [])).strip()
-        print(f"  DEBUG task: '{name_debug}' | eisen='{eisen_text}'")
 
         # Only include "1. Do" items
         if "1. Do" not in eisen_text:
