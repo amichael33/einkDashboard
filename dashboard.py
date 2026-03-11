@@ -18,7 +18,9 @@ try:
 except ImportError:
     from backports.zoneinfo import ZoneInfo
 
+# ─────────────────────────────────────────────
 #  CONFIG
+# ─────────────────────────────────────────────
 NOTION_TOKEN   = "REDACTED_NOTION_TOKEN"
 HOMEWORK_DB_ID = "REDACTED_DB_ID"
 TASKS_DB_ID    = "REDACTED_DB_ID"
@@ -40,7 +42,9 @@ STATUS_SYMBOLS = {
     "Done":        "●",
 }
 
+# ─────────────────────────────────────────────
 #  FONTS
+# ─────────────────────────────────────────────
 def load_font(size, bold=False):
     paths = [
         f"/usr/share/fonts/truetype/dejavu/DejaVuSans{'-Bold' if bold else ''}.ttf",
@@ -52,7 +56,9 @@ def load_font(size, bold=False):
             return ImageFont.truetype(p, size)
     return ImageFont.load_default()
 
+# ─────────────────────────────────────────────
 #  NOTION FETCH
+# ─────────────────────────────────────────────
 def get_week_bounds():
     today = datetime.now(CENTRAL).date()
     monday = today - timedelta(days=today.weekday())
@@ -65,12 +71,17 @@ def fetch_notion_db(db_id, payload):
     resp.raise_for_status()
     return resp.json().get("results", [])
 
+def parse_notion_date(date_str):
+    """Parse a Notion date string (date or datetime with timezone) to a date object."""
+    if not date_str:
+        return None
+    # Always just take the first 10 chars (YYYY-MM-DD) regardless of time/tz
+    return date.fromisoformat(date_str[:10])
+
 def fetch_homework(monday, sunday):
+    # Fetch without date filter since Notion chokes on datetime vs date comparisons
+    # We'll filter manually after parsing
     payload = {
-        "filter": {"and": [
-            {"property": "Due date", "date": {"on_or_after": monday.isoformat()}},
-            {"property": "Due date", "date": {"on_or_before": sunday.isoformat()}},
-        ]},
         "sorts": [{"property": "Due date", "direction": "ascending"}]
     }
     pages = fetch_notion_db(HOMEWORK_DB_ID, payload)
@@ -81,8 +92,9 @@ def fetch_homework(monday, sunday):
         status = props.get("Status", {}).get("status", {}).get("name", "Not started")
         due_str = props.get("Due date", {}).get("date", {})
         if due_str and due_str.get("start"):
-            due = date.fromisoformat(due_str["start"][:10])
-            items.append({"name": name, "status": status, "due": due})
+            due = parse_notion_date(due_str["start"])
+            if due and monday <= due <= sunday:
+                items.append({"name": name, "status": status, "due": due})
     return items
 
 def fetch_tasks():
@@ -103,29 +115,20 @@ def fetch_tasks():
     for page in pages:
         props = page.get("properties", {})
 
-        # Eisenhower status - it's a formula returning rich_text
+        # Eisenhower status — formula property returns string
         eisen_prop = props.get("Eisenhower Status", {})
-        eisen_text = ""
-        for block in eisen_prop.get("formula", {}).get("string", ""), \
-                     eisen_prop.get("rich_text", []):
-            if isinstance(block, str):
-                eisen_text = block
-                break
-            if isinstance(block, dict):
-                eisen_text = block.get("plain_text", "")
-                break
+        formula = eisen_prop.get("formula", {})
+        eisen_text = formula.get("string", "") or ""
 
         # Only include "1. Do" items
-        if "1. Do" not in eisen_text and "Do" not in eisen_text:
+        if "1. Do" not in eisen_text:
             continue
 
         name = "".join(t.get("plain_text", "") for t in props.get("Name", {}).get("title", [])).strip() or "Untitled"
         status = props.get("Status", {}).get("status", {}).get("name", "Inbox")
 
         due_str = props.get("Due Date", {}).get("date", {})
-        due = None
-        if due_str and due_str.get("start"):
-            due = date.fromisoformat(due_str["start"][:10])
+        due = parse_notion_date(due_str.get("start")) if due_str else None
 
         items.append({"name": name, "status": status, "due": due})
     return items
@@ -141,7 +144,9 @@ def fetch_quote():
         pass
     return '"Do the work." — Unknown'
 
+# ─────────────────────────────────────────────
 #  DRAW HELPERS
+# ─────────────────────────────────────────────
 def draw_half_filled_square(draw, x, y, size):
     """Draw a square with diagonal half-fill (top-left triangle = filled)."""
     draw.rectangle([x, y, x + size, y + size], outline=0, fill=1)
@@ -157,7 +162,9 @@ def draw_empty_square(draw, x, y, size):
 def draw_filled_square(draw, x, y, size):
     draw.rectangle([x, y, x + size, y + size], outline=0, fill=0)
 
+# ─────────────────────────────────────────────
 #  RENDER
+# ─────────────────────────────────────────────
 def render(homework_by_day, tasks, monday, quote_text):
     img  = Image.new("1", (WIDTH, HEIGHT), 1)
     draw = ImageDraw.Draw(img)
@@ -168,7 +175,7 @@ def render(homework_by_day, tasks, monday, quote_text):
     f_small  = load_font(10)
     f_tiny   = load_font(9)
 
-    #  LAYOUT CONSTANTS 
+    # ── LAYOUT CONSTANTS ────────────────────────
     HEADER_H   = 22   # date + quote row
     PROGRESS_H = 18   # progress bars row
     TOP_H      = HEADER_H + PROGRESS_H
@@ -181,7 +188,7 @@ def render(homework_by_day, tasks, monday, quote_text):
     COL_TOP    = TOP_H
     COL_BOTTOM = HEIGHT - 1
 
-    #  HEADER: date left, quote right 
+    # ── HEADER: date left, quote right ──────────
     date_str = today.strftime("%A, %B %-d %Y")
     draw.text((4, 3), date_str, font=f_large, fill=0)
 
@@ -196,7 +203,7 @@ def render(homework_by_day, tasks, monday, quote_text):
     # Thin divider under header
     draw.line([0, HEADER_H, WIDTH, HEADER_H], fill=0, width=1)
 
-    #  PROGRESS ROW 
+    # ── PROGRESS ROW ────────────────────────────
     py = HEADER_H + 2
 
     # Week progress — 7 circles
@@ -236,7 +243,7 @@ def render(homework_by_day, tasks, monday, quote_text):
 
     draw.line([0, TOP_H, WIDTH, TOP_H], fill=0, width=1)
 
-    #  6 HOMEWORK COLUMNS 
+    # ── 6 HOMEWORK COLUMNS ──────────────────────
     DAY_NAMES  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat/Sun"]
     DAY_DATES  = [monday + timedelta(days=i) for i in range(5)] + [monday + timedelta(days=5)]
 
@@ -295,7 +302,7 @@ def render(homework_by_day, tasks, monday, quote_text):
     for col in range(1, COL_COUNT):
         draw.line([col * COL_W, COL_TOP, col * COL_W, COL_BOTTOM], fill=0, width=1)
 
-    #  RIGHT PANEL: TASKS 
+    # ── RIGHT PANEL: TASKS ───────────────────────
     px = HW_WIDTH
     draw.line([px, COL_TOP, px, COL_BOTTOM], fill=0, width=1)
 
@@ -348,7 +355,9 @@ def render(homework_by_day, tasks, monday, quote_text):
 
     return img
 
+# ─────────────────────────────────────────────
 #  PUSH TO DISPLAY
+# ─────────────────────────────────────────────
 def push_to_display(img):
     try:
         sys.path.insert(0, "/home/amichael/e-Paper/lib")
@@ -368,7 +377,9 @@ def push_to_display(img):
         img.save("/home/amichael/Desktop/eink/dashboard_error_preview.png")
         raise
 
+# ─────────────────────────────────────────────
 #  MAIN
+# ─────────────────────────────────────────────
 def main():
     print("→ Fetching week bounds…")
     monday, sunday = get_week_bounds()
