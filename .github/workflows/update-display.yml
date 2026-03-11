@@ -1,0 +1,25 @@
+name: Update E-Ink Display
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 5 * * *'    # midnight Central (UTC-5)
+    - cron: '30 13 * * *'  # 8:30am Central
+    - cron: '0 17 * * *'   # 12:00pm Central
+    - cron: '0 21 * * *'   # 4:00pm Central
+    - cron: '30 23 * * *'  # 6:30pm Central
+
+jobs:
+  update:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: pip3 install requests pillow --break-system-packages --quiet
+
+      - name: Run dashboard
+        run: python3 dashboard.py
