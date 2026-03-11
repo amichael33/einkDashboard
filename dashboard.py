@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-E-Ink Homework Dashboard for Waveshare 7.5" B&W display
-Pulls homework from Notion + quote of the day, renders a weekly calendar view
-"""
 
 import os
 import sys
@@ -12,9 +8,9 @@ from datetime import datetime, timedelta, date
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
 
-#  CONFIG — fill these in
+#  CONFIG
 NOTION_TOKEN       = "REDACTED_NOTION_TOKEN"
-HOMEWORK_DB_ID     = "REDACTED_DB_ID"   # 32-char DB id from Notion URL
+HOMEWORK_DB_ID     = "REDACTED_DB_ID" 
 
 # Status display config
 STATUS_SYMBOLS = {
@@ -232,7 +228,7 @@ def push_to_display(img):
     """Send image to Waveshare 7.5" V2 e-ink display."""
     try:
         # Waveshare library path (adjust if yours differs)
-        sys.path.insert(0, "/home/pi/e-Paper/RaspberryPi_JetsonNano/python/lib")
+        sys.path.insert(0, "/home/amichael/e-Paper/lib")
         from waveshare_epd import epd7in5_V2
         epd = epd7in5_V2.EPD()
         epd.init()
@@ -242,12 +238,12 @@ def push_to_display(img):
         print("✓ Display updated.")
     except ImportError:
         # Save image locally if display lib not available (for testing)
-        out = "/home/pi/dashboard_preview.png"
+        out = "/home/amichael/Desktop/eink/dashboard_preview.png"
         img.save(out)
         print(f"⚠ Waveshare lib not found — saved preview to {out}")
     except Exception as e:
         print(f"✗ Display error: {e}")
-        img.save("/home/pi/dashboard_error_preview.png")
+        img.save("/home/amichael/Desktop/eink/dashboard_error_preview.png")
         raise
 
 
