@@ -182,21 +182,21 @@ def render(homework_by_day, tasks, monday, quote_text):
     draw = ImageDraw.Draw(img)
 
     today    = datetime.now(CENTRAL).date()
-    f_large  = load_font(16, bold=True)
-    f_med    = load_font(12, bold=True)
-    f_small  = load_font(10)
-    f_tiny   = load_font(9)
+    f_large  = load_font(19, bold=True)
+    f_med    = load_font(14, bold=True)
+    f_small  = load_font(12)
+    f_tiny   = load_font(11)
 
     # ── LAYOUT CONSTANTS ────────────────────────
-    HEADER_H   = 22   # date + quote row
-    PROGRESS_H = 18   # progress bars row
+    HEADER_H   = 26   # date + quote row
+    PROGRESS_H = 20   # progress bars row
     TOP_H      = HEADER_H + PROGRESS_H
-    TASK_PANEL = 160  # right panel width for Tasks
+    TASK_PANEL = 165  # right panel width for Tasks
     HW_WIDTH   = WIDTH - TASK_PANEL
     COL_COUNT  = 6    # Mon Tue Wed Thu Fri Sat+Sun
     COL_W      = HW_WIDTH // COL_COUNT
-    DAY_HDR_H  = 22
-    TASK_H     = 26
+    DAY_HDR_H  = 24
+    TASK_H     = 28
     COL_TOP    = TOP_H
     COL_BOTTOM = HEIGHT - 1
 
@@ -222,9 +222,9 @@ def render(homework_by_day, tasks, monday, quote_text):
     week_day = today.weekday()  # 0=Mon, 6=Sun
     CIRCLE_R = 5
     CIRCLE_GAP = 14
-    wx = 6
-    draw.text((wx, py), "W", font=f_tiny, fill=0)
-    wx += 14
+    wx = 4
+    draw.text((wx, py), "Week", font=f_tiny, fill=0)
+    wx += int(draw.textlength("Week", font=f_tiny)) + 6
     for i in range(7):
         cx, cy = wx + i * CIRCLE_GAP + CIRCLE_R, py + CIRCLE_R + 1
         if i < week_day:
@@ -238,20 +238,20 @@ def render(homework_by_day, tasks, monday, quote_text):
     # Month progress bar
     days_in_month = (date(today.year, today.month % 12 + 1, 1) - timedelta(days=1)).day if today.month < 12 else 31
     month_pct = today.day / days_in_month
-    mx = wx + 7 * CIRCLE_GAP + 10
-    draw.text((mx, py), "M", font=f_tiny, fill=0)
-    mx += 14
+    mx = wx + 7 * CIRCLE_GAP + 12
+    draw.text((mx, py), "Month", font=f_tiny, fill=0)
+    mx += int(draw.textlength("Month", font=f_tiny)) + 6
     BAR_W, BAR_H = 80, 10
-    draw.rectangle([mx, py + 1, mx + BAR_W, py + BAR_H], outline=0, fill=1)
-    draw.rectangle([mx, py + 1, mx + int(BAR_W * month_pct), py + BAR_H], fill=0)
+    draw.rectangle([mx, py + 2, mx + BAR_W, py + BAR_H + 2], outline=0, fill=1)
+    draw.rectangle([mx, py + 2, mx + int(BAR_W * month_pct), py + BAR_H + 2], fill=0)
 
     # Year progress bar
-    yx = mx + BAR_W + 10
-    draw.text((yx, py), "Y", font=f_tiny, fill=0)
-    yx += 14
+    yx = mx + BAR_W + 12
+    draw.text((yx, py), "Year", font=f_tiny, fill=0)
+    yx += int(draw.textlength("Year", font=f_tiny)) + 6
     year_pct = today.timetuple().tm_yday / (366 if today.year % 4 == 0 else 365)
-    draw.rectangle([yx, py + 1, yx + BAR_W, py + BAR_H], outline=0, fill=1)
-    draw.rectangle([yx, py + 1, yx + int(BAR_W * year_pct), py + BAR_H], fill=0)
+    draw.rectangle([yx, py + 2, yx + BAR_W, py + BAR_H + 2], outline=0, fill=1)
+    draw.rectangle([yx, py + 2, yx + int(BAR_W * year_pct), py + BAR_H + 2], fill=0)
 
     draw.line([0, TOP_H, WIDTH, TOP_H], fill=0, width=1)
 
