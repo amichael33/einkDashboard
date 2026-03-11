@@ -24,15 +24,11 @@ STATUS_LABELS = {
     "Done":        "Done",
 }
 
-# ─────────────────────────────────────────────
 #  DISPLAY SIZE  (Waveshare 7.5" V2 = 800×480)
-# ─────────────────────────────────────────────
 WIDTH  = 800
 HEIGHT = 480
 
-# ─────────────────────────────────────────────
 #  NOTION API
-# ─────────────────────────────────────────────
 NOTION_VERSION = "2022-06-28"
 NOTION_HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -108,9 +104,7 @@ def fetch_quote():
     return '"Do the work." — Unknown'
 
 
-# ─────────────────────────────────────────────
-#  FONT HELPERS  (uses DejaVu bundled w/ PIL)
-# ─────────────────────────────────────────────
+#  FONT HELPERS  (DejaVu bundled w/ PIL)
 def load_font(size, bold=False):
     paths = [
         f"/usr/share/fonts/truetype/dejavu/DejaVuSans{'-Bold' if bold else ''}.ttf",
@@ -123,9 +117,7 @@ def load_font(size, bold=False):
     return ImageFont.load_default()
 
 
-# ─────────────────────────────────────────────
 #  RENDER
-# ─────────────────────────────────────────────
 def render(homework_by_day, monday, quote_text):
     img  = Image.new("1", (WIDTH, HEIGHT), 1)   # "1" = 1-bit B&W, 1=white
     draw = ImageDraw.Draw(img)
@@ -139,14 +131,14 @@ def render(homework_by_day, monday, quote_text):
 
     DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-    # ── Header bar ──────────────────────────────
+    #  Header bar 
     HEADER_H = 30
     draw.rectangle([0, 0, WIDTH, HEADER_H], fill=0)   # black bar
 
     week_str = monday.strftime("%B %d") + " – " + (monday + timedelta(days=6)).strftime("%B %d, %Y")
     draw.text((8, 6), f"Homework Week  •  {week_str}", font=f_title, fill=1)  # white text
 
-    # ── 7 columns ───────────────────────────────
+    # 7 columns
     COL_COUNT  = 7
     COL_W      = WIDTH // COL_COUNT          # ~114px each
     COL_TOP    = HEADER_H + 1
@@ -211,7 +203,7 @@ def render(homework_by_day, monday, quote_text):
         x = col * COL_W
         draw.line([x, COL_TOP, x, COL_BOTTOM], fill=0, width=1)
 
-    # ── Quote bar at bottom ──────────────────────
+    # Quote bar at bottom
     draw.rectangle([0, COL_BOTTOM + 1, WIDTH, HEIGHT], fill=0)
     # Truncate quote to fit one line
     max_q_chars = WIDTH // 5
@@ -221,9 +213,7 @@ def render(homework_by_day, monday, quote_text):
     return img
 
 
-# ─────────────────────────────────────────────
 #  PUSH TO DISPLAY
-# ─────────────────────────────────────────────
 def push_to_display(img):
     """Send image to Waveshare 7.5" V2 e-ink display."""
     try:
@@ -246,10 +236,7 @@ def push_to_display(img):
         img.save("/home/amichael/Desktop/eink/dashboard_error_preview.png")
         raise
 
-
-# ─────────────────────────────────────────────
 #  MAIN
-# ─────────────────────────────────────────────
 def main():
     print("→ Fetching week bounds…")
     monday, sunday = get_week_bounds()
