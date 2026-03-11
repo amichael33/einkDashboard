@@ -2,8 +2,9 @@
 
 A Raspberry Pi-powered e-ink display dashboard that syncs with Notion to show a weekly homework view, priority tasks, and daily progress — refreshed automatically throughout the day.
 
-[![Waveshare 7.5" E-Ink Display](https://www.waveshare.com/img/devkit/general/7.5inch-e-paper-hat.jpg)
-](https://www.waveshare.com/pico-epaper-7.5.htm?srsltid=AfmBOorl9QlHSdyojZRyrNhvVcEIUEvpxjp2KjBB5vPhDY1RfWTBE6L6)
+[Waveshare 7.5" E-Ink Display](https://www.waveshare.com/img/devkit/general/7.5inch-e-paper-hat.jpg)
+(https://www.waveshare.com/pico-epaper-7.5.htm?srsltid=AfmBOorl9QlHSdyojZRyrNhvVcEIUEvpxjp2KjBB5vPhDY1RfWTBE6L6)
+https://www.waveshare.com/wiki/7.5inch_e-Paper_HAT 
 ---
 
 ## What it shows
