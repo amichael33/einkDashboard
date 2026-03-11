@@ -119,6 +119,8 @@ def fetch_tasks():
         eisen_prop = props.get("Eisenhower Status", {})
         formula = eisen_prop.get("formula", {})
         eisen_text = formula.get("string", "") or ""
+        name_debug = "".join(t.get("plain_text", "") for t in props.get("Name", {}).get("title", [])).strip()
+        print(f"  DEBUG task: '{name_debug}' | eisen='{eisen_text}'")
 
         # Only include "1. Do" items
         if "1. Do" not in eisen_text:
@@ -386,16 +388,7 @@ def main():
     print(f"  Week: {monday} – {sunday}")
 
     print("→ Querying Notion homework…")
-    hw_pages = fetch_homework(monday, sunday)
-    hw_items = []
-    for page in hw_pages:
-        props = page.get("properties", {})
-        name = "".join(t.get("plain_text", "") for t in props.get("Name", {}).get("title", [])).strip() or "Untitled"
-        status = props.get("Status", {}).get("status", {}).get("name", "Not started")
-        due_str = props.get("Due date", {}).get("date", {})
-        if due_str and due_str.get("start"):
-            due = date.fromisoformat(due_str["start"][:10])
-            hw_items.append({"name": name, "status": status, "due": due})
+    hw_items = fetch_homework(monday, sunday)
     print(f"  Found {len(hw_items)} homework items.")
 
     homework_by_day = {}
