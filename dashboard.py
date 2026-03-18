@@ -32,10 +32,11 @@ except ImportError:
 # ─────────────────────────────────────────────
 #  CONFIG
 # ─────────────────────────────────────────────
-NOTION_TOKEN   = "REDACTED_NOTION_TOKEN"
-HOMEWORK_DB_ID = "REDACTED_DB_ID"
-TASKS_DB_ID    = "REDACTED_DB_ID"
-QUOTES_DB_ID   = "REDACTED_DB_ID"
+NOTION_TOKEN      = "REDACTED_NOTION_TOKEN"
+HOMEWORK_DB_ID    = "REDACTED_DB_ID"
+TASKS_DB_ID       = "REDACTED_DB_ID"
+QUOTES_DB_ID      = "REDACTED_DB_ID"
+COUNTDOWNS_DB_ID  = "REDACTED_DB_ID"
 
 CENTRAL = ZoneInfo("America/Chicago")
 WIDTH, HEIGHT = 800, 480
@@ -201,6 +202,30 @@ def fetch_temperature():
         pass
     return None, None
 
+def fetch_countdowns():
+    """Fetch next 5 upcoming Days Until countdowns that aren't done."""
+    today   = datetime.now(CENTRAL).date()
+    payload = {
+        "filter": {"and": [
+            {"property": "Mode",  "select":   {"equals": "Days Until"}},
+            {"property": "done",  "checkbox": {"equals": False}},
+            {"property": "Date",  "date":     {"on_or_after": today.isoformat()}},
+        ]},
+        "sorts": [{"property": "Date", "direction": "ascending"}],
+        "page_size": 5,
+    }
+    pages = fetch_notion_db(COUNTDOWNS_DB_ID, payload)
+    items = []
+    for page in pages:
+        props = page.get("properties", {})
+        name  = "".join(t.get("plain_text", "") for t in props.get("Countdown", {}).get("title", [])).strip() or "Untitled"
+        due_str = props.get("Date", {}).get("date", {})
+        due     = parse_notion_date(due_str.get("start")) if due_str else None
+        if due:
+            days_left = (due - today).days
+            items.append({"name": name, "due": due, "days_left": days_left})
+    return items[:5]
+
 # ─────────────────────────────────────────────
 #  DRAW HELPERS
 # ─────────────────────────────────────────────
@@ -345,17 +370,21 @@ def render_homework_screen():
     for col in range(1, COL_COUNT):
         draw.line([col*COL_W, COL_TOP, col*COL_W, COL_BOTTOM], fill=0, width=1)
 
-    # Tasks panel
-    px = HW_WIDTH
+    # ── RIGHT PANEL ──────────────────────────────
+    px         = HW_WIDTH
+    PANEL_MID  = COL_TOP + (COL_BOTTOM - COL_TOP) // 2
+    SQ         = 11
+    PANEL_TASK_H = 38
+
     draw.line([px, COL_TOP, px, COL_BOTTOM], fill=0, width=1)
+
+    # ── TOP HALF: Do First tasks ─────────────────
     draw.rectangle([px, COL_TOP, WIDTH, COL_TOP+DAY_HDR_H], fill=0)
     draw.text((px+4, COL_TOP+4), "★ Do First", font=f_med, fill=1)
 
     task_y = COL_TOP + DAY_HDR_H + 3
-    SQ = 11
-    PANEL_TASK_H = 40
     for task in tasks:
-        if task_y + PANEL_TASK_H > COL_BOTTOM - 2:
+        if task_y + PANEL_TASK_H > PANEL_MID - 2:
             draw.text((px+4, task_y), f"+{len(tasks)-tasks.index(task)} more", font=f_tiny, fill=0)
             break
         in_progress = task["status"] in ("Next Action", "In progress")
@@ -366,15 +395,57 @@ def render_homework_screen():
         text_x      = px + SQ + 7
         avail_chars = max(1, (TASK_PANEL - SQ - 14) // 7)
         lines       = textwrap.wrap(task["name"], width=avail_chars)
-        # Draw up to 2 lines
         draw.text((text_x, task_y+1), lines[0] if lines else task["name"], font=f_small, fill=0)
         if len(lines) > 1:
-            draw.text((text_x, task_y+15), lines[1], font=f_small, fill=0)
+            draw.text((text_x, task_y+14), lines[1], font=f_small, fill=0)
         if task["due"]:
             days_left = (task["due"] - today).days
             due_label = "overdue" if days_left < 0 else "today" if days_left == 0 else "tmrw" if days_left == 1 else task["due"].strftime("%-m/%-d")
-            draw.text((text_x, task_y+29), due_label, font=f_tiny, fill=0)
+            draw.text((text_x, task_y+27), due_label, font=f_tiny, fill=0)
         task_y += PANEL_TASK_H + 1
+
+    # Divider between halves
+    draw.line([px, PANEL_MID, WIDTH, PANEL_MID], fill=0, width=1)
+
+    # ── BOTTOM HALF: Countdowns ──────────────────
+    draw.rectangle([px, PANEL_MID, WIDTH, PANEL_MID+DAY_HDR_H], fill=0)
+    draw.text((px+4, PANEL_MID+4), "⏳ Countdowns", font=f_med, fill=1)
+
+    try:
+        countdowns = fetch_countdowns()
+    except Exception as e:
+        print(f"  ⚠ Countdowns fetch failed: {e}")
+        countdowns = []
+
+    CDN_TASK_H = 32
+    cdn_y = PANEL_MID + DAY_HDR_H + 3
+    for cdn in countdowns:
+        if cdn_y + CDN_TASK_H > COL_BOTTOM - 2:
+            break
+        days = cdn["days_left"]
+        if days == 0:
+            days_label = "Today!"
+        elif days == 1:
+            days_label = "Tmrw"
+        else:
+            days_label = f"{days}d"
+
+        # Days badge (left-aligned)
+        badge_str = days_label
+        badge_w   = int(draw.textlength(badge_str, font=f_tiny)) + 6
+        badge_x   = px + 3
+        draw.rectangle([badge_x, cdn_y+3, badge_x+badge_w, cdn_y+CDN_TASK_H-4], fill=0)
+        draw.text((badge_x+3, cdn_y+6), badge_str, font=f_tiny, fill=1)
+
+        # Name to the right of badge
+        text_x      = badge_x + badge_w + 5
+        avail_chars = max(1, (WIDTH - text_x - 4) // 7)
+        lines       = textwrap.wrap(cdn["name"], width=avail_chars)
+        draw.text((text_x, cdn_y+3),  lines[0] if lines else cdn["name"], font=f_small, fill=0)
+        if len(lines) > 1:
+            draw.text((text_x, cdn_y+17), lines[1], font=f_tiny, fill=0)
+
+        cdn_y += CDN_TASK_H + 1
 
     draw_screen_indicator(draw, 1, f_tiny)
     return img
