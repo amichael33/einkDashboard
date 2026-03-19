@@ -147,6 +147,8 @@ def fetch_homework():
                     "end": clamped_end,
                     "multiday": end > start,
                 })
+    # Filter out completed items
+    items = [i for i in items if i["status"] != "Done"]
     return items, monday
 
 def fetch_tasks():
@@ -374,26 +376,74 @@ def render_homework_screen():
         if task_y + TASK_H > COL_BOTTOM - 2:
             continue
 
-        # Draw the task box spanning columns
-        draw.rectangle([x0_task, task_y, x1_task, task_y+TASK_H-2], outline=0, fill=1)
+        # Draw the task box spanning columns — height based on content
+        line_count = min(2, len(textwrap.wrap(task["name"], width=max(1, (x1_task - x0_task - 8) // 7))))
+        box_h = 14 + line_count * 13 + 14  # padding + lines + status row
+        box_h = max(box_h, TASK_H - 2)
 
-        # Task name — wider if multi-day
+        draw.rectangle([x0_task, task_y, x1_task, task_y + box_h], outline=0, fill=1)
+
+        # Task name
         span_w    = x1_task - x0_task
         max_chars = max(1, (span_w - 8) // 7)
         lines     = textwrap.wrap(task["name"], width=max_chars)
-        draw.text((x0_task+4, task_y+1), lines[0] if lines else task["name"], font=f_small, fill=0)
-        if len(lines) > 1:
-            draw.text((x0_task+4, task_y+14), lines[1], font=f_small, fill=0)
+        y_text    = task_y + 3
+        for line in lines[:2]:
+            draw.text((x0_task+4, y_text), line, font=f_small, fill=0)
+            y_text += 14
         sym = STATUS_SYMBOLS.get(task["status"], "○")
-        draw.text((x0_task+4, task_y+27), f"{sym} {task['status']}", font=f_tiny, fill=0)
+        draw.text((x0_task+4, y_text + 1), f"{sym} {task['status']}", font=f_tiny, fill=0)
+
+        actual_h = y_text + 14 - task_y
 
         # Advance y for all columns this task spans
         for c in range(start_col, end_col+1):
-            col_task_y[c] = task_y + TASK_H + 1
+            col_task_y[c] = task_y + actual_h + 3
 
-    # Vertical dividers drawn on top so they show through multi-day tasks
+    # ── Vertical dividers — skip segments covered by multi-day tasks ──
+    # Build a set of (col_boundary, y_start, y_end) segments to blank
+    blocked = {}  # col_divider → list of (y0, y1) to skip
+    for task in hw_items:
+        if not task["multiday"]:
+            continue
+        sc = date_to_col(task["start"])
+        ec = date_to_col(task["end"])
+        if sc is None or ec is None:
+            continue
+        # Find the y range this task occupied
+        # We stored the final y in col_task_y — work backwards
+        # Simpler: block from COL_TOP+DAY_HDR_H to COL_BOTTOM for internal dividers
+        for div_col in range(sc + 1, ec + 1):
+            if div_col not in blocked:
+                blocked[div_col] = []
+            # Find the task's y range — approximate from col_task_y
+            task_top = COL_TOP + DAY_HDR_H + 2
+            task_bot = col_task_y[sc] - 3
+            blocked[div_col].append((task_top, task_bot))
+
     for col in range(1, COL_COUNT):
-        draw.line([col*COL_W, COL_TOP+DAY_HDR_H, col*COL_W, COL_BOTTOM], fill=0, width=1)
+        x = col * COL_W
+        y_cursor = COL_TOP + DAY_HDR_H
+        segs_to_skip = blocked.get(col, [])
+        # Draw line in segments, skipping blocked ranges
+        all_points = [(COL_TOP + DAY_HDR_H, False), (COL_BOTTOM, False)]
+        for (y0, y1) in segs_to_skip:
+            all_points.append((y0, True))   # start skip
+            all_points.append((y1, False))  # end skip
+        all_points.sort(key=lambda p: p[0])
+
+        y_draw = COL_TOP + DAY_HDR_H
+        skipping = False
+        for (y_pt, is_skip_start) in all_points:
+            if not skipping and y_pt > y_draw:
+                draw.line([x, y_draw, x, y_pt], fill=0, width=1)
+            if is_skip_start:
+                skipping = True
+            else:
+                skipping = False
+                y_draw = y_pt
+        if not skipping and y_draw < COL_BOTTOM:
+            draw.line([x, y_draw, x, COL_BOTTOM], fill=0, width=1)
 
     # ── RIGHT PANEL ──────────────────────────────
     px         = HW_WIDTH
@@ -434,7 +484,16 @@ def render_homework_screen():
 
     # ── BOTTOM HALF: Countdowns ──────────────────
     draw.rectangle([px, PANEL_MID, WIDTH, PANEL_MID+DAY_HDR_H], fill=0)
-    draw.text((px+4, PANEL_MID+4), "⏳ Countdowns", font=f_med, fill=1)
+
+    # Draw hourglass shape manually (e-ink can't render emoji)
+    hx, hy = px + 5, PANEL_MID + 4
+    hw, hh  = 10, 18
+    draw.polygon([(hx, hy), (hx+hw, hy), (hx+hw//2, hy+hh//2)], fill=1)
+    draw.polygon([(hx, hy+hh), (hx+hw, hy+hh), (hx+hw//2, hy+hh//2)], fill=1)
+    draw.line([hx, hy, hx+hw, hy], fill=1, width=2)
+    draw.line([hx, hy+hh, hx+hw, hy+hh], fill=1, width=2)
+
+    draw.text((px + hw + 9, PANEL_MID+4), "Countdowns", font=f_med, fill=1)
 
     try:
         countdowns = fetch_countdowns()
