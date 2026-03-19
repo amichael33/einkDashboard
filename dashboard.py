@@ -145,12 +145,9 @@ def fetch_tasks():
     today  = datetime.now(CENTRAL).date()
     cutoff = today + timedelta(days=30)
     payload = {
-        "filter": {"and": [
-            {"property": "Status", "status": {"does_not_equal": "Completed"}},
-            {"or": [
-                {"property": "Due Date", "date": {"is_empty": True}},
-                {"property": "Due Date", "date": {"on_or_before": cutoff.isoformat()}},
-            ]}
+        "filter": {"or": [
+            {"property": "Due Date", "date": {"is_empty": True}},
+            {"property": "Due Date", "date": {"on_or_before": cutoff.isoformat()}},
         ]},
         "sorts": [{"property": "Due Date", "direction": "ascending"}]
     }
@@ -161,31 +158,27 @@ def fetch_tasks():
         eisen_text = props.get("Eisenhower Status", {}).get("formula", {}).get("string", "") or ""
         if "1. Do" not in eisen_text:
             continue
+        status = props.get("Status", {}).get("status", {}).get("name", "Inbox")
+        if status == "Completed":
+            continue
         name    = "".join(t.get("plain_text", "") for t in props.get("Name", {}).get("title", [])).strip() or "Untitled"
-        status  = props.get("Status", {}).get("status", {}).get("name", "Inbox")
         due_str = props.get("Due Date", {}).get("date", {})
         due     = parse_notion_date(due_str.get("start")) if due_str else None
         items.append({"name": name, "status": status, "due": due})
     return items
 
 def fetch_quotes():
-    payload = {"sorts": [{"property": "Author", "direction": "ascending"}]}
-    pages   = fetch_notion_db(QUOTES_DB_ID, payload)
-    items   = []
-    for page in pages:
-        props  = page.get("properties", {})
-        quote  = "".join(t.get("plain_text", "") for t in props.get("Quote", {}).get("title", [])).strip()
-        author = "".join(t.get("plain_text", "") for t in props.get("Author", {}).get("rich_text", [])).strip()
-        cat_prop = props.get("Category", {})
-        if cat_prop.get("select"):
-            category = cat_prop["select"].get("name", "")
-        elif cat_prop.get("multi_select"):
-            category = ", ".join(o["name"] for o in cat_prop["multi_select"])
-        else:
-            category = ""
-        if quote:
-            items.append({"quote": quote, "author": author, "category": category})
-    return items
+    """Fetch a batch of random quotes from ZenQuotes."""
+    try:
+        resp  = requests.get("https://zenquotes.io/api/quotes", timeout=5)
+        data  = resp.json()
+        items = []
+        for q in data:
+            if q.get("q") and q.get("a"):
+                items.append({"quote": q["q"], "author": q["a"], "category": ""})
+        return items
+    except Exception:
+        return [{"quote": "Do the work.", "author": "Unknown", "category": ""}]
 
 def fetch_temperature():
     try:
@@ -491,7 +484,7 @@ def render_temperature_screen():
 
 
 def render_quotes_screen():
-    global all_quotes, filtered_quotes, quote_index, quote_filter
+    global all_quotes, filtered_quotes, quote_index
 
     img  = Image.new("1", (WIDTH, HEIGHT), 1)
     draw = ImageDraw.Draw(img)
@@ -500,18 +493,14 @@ def render_quotes_screen():
     f_quote  = load_font(22)
     f_author = load_font(16, bold=True)
     f_tiny   = load_font(11)
-    f_small  = load_font(13)
 
     today    = datetime.now(CENTRAL).date()
     date_str = today.strftime("%A, %B %-d %Y")
     draw.text((4, 3), date_str, font=f_large, fill=0)
-
-    cat_label = f"Category: {quote_filter or 'All'}"
-    draw.text((WIDTH - int(draw.textlength(cat_label, font=f_tiny)) - 6, 6), cat_label, font=f_tiny, fill=0)
     draw.line([0, 26, WIDTH, 26], fill=0, width=1)
 
     if not filtered_quotes:
-        draw.text((20, 200), "No quotes found. Add some to your Notion database!", font=f_small, fill=0)
+        draw.text((20, 200), "No quotes available.", font=f_large, fill=0)
         draw_screen_indicator(draw, 5, f_tiny)
         return img
 
@@ -526,9 +515,7 @@ def render_quotes_screen():
     draw.text((MARGIN - 20, 40), "\u201c", font=load_font(60, bold=True), fill=0)
 
     # Quote text
-    MAX_W     = WIDTH - MARGIN * 2
-    char_w    = 12
-    max_chars = MAX_W // char_w
+    max_chars = (WIDTH - MARGIN * 2) // 12
     lines     = textwrap.wrap(q["quote"], width=max_chars)
     y         = 80
     LINE_H    = 32
@@ -540,13 +527,8 @@ def render_quotes_screen():
     y += 10
     draw.text((MARGIN, y), f"\u201d  \u2014 {q['author']}", font=f_author, fill=0)
 
-    # Category tag
-    if q["category"]:
-        y += 34
-        draw.text((MARGIN, y), f"[ {q['category']} ]", font=f_tiny, fill=0)
-
     # Button hints
-    hints = "Small 4: Prev  |  Small 2: Next  |  Small 3: Filter category  |  Small 1: Refresh"
+    hints = "Small 4: Prev  |  Small 2: Next  |  Small 1: New batch"
     draw.text((10, HEIGHT - 20), hints, font=f_tiny, fill=0)
 
     draw_screen_indicator(draw, 5, f_tiny)
@@ -656,7 +638,7 @@ def on_reset(channel):
     print("  → Force reset")
     if current_screen == 5:
         all_quotes      = fetch_quotes()
-        filtered_quotes = [q for q in all_quotes if quote_filter is None or q["category"] == quote_filter]
+        filtered_quotes = all_quotes[:]
         quote_index     = 0
     refresh_current_screen()
 
@@ -673,15 +655,8 @@ def on_prev(channel):
         refresh_current_screen()
 
 def on_filter(channel):
-    global quote_filter, filtered_quotes, quote_index
-    if current_screen == 5 and all_quotes:
-        categories   = [None] + sorted(set(q["category"] for q in all_quotes if q["category"]))
-        idx          = categories.index(quote_filter) if quote_filter in categories else 0
-        quote_filter = categories[(idx + 1) % len(categories)]
-        filtered_quotes = [q for q in all_quotes if quote_filter is None or q["category"] == quote_filter]
-        quote_index  = 0
-        print(f"  Filter: {quote_filter or 'All'} ({len(filtered_quotes)} quotes)")
-        refresh_current_screen()
+    # No longer used for category filtering — reserved for future use
+    pass
 
 def on_onoff(channel):
     import RPi.GPIO as GPIO
