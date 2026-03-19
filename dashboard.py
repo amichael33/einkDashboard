@@ -145,10 +145,6 @@ def fetch_tasks():
     today  = datetime.now(CENTRAL).date()
     cutoff = today + timedelta(days=30)
     payload = {
-        "filter": {"or": [
-            {"property": "Due Date", "date": {"is_empty": True}},
-            {"property": "Due Date", "date": {"on_or_before": cutoff.isoformat()}},
-        ]},
         "sorts": [{"property": "Due Date", "direction": "ascending"}]
     }
     pages = fetch_notion_db(TASKS_DB_ID, payload)
@@ -164,6 +160,9 @@ def fetch_tasks():
         name    = "".join(t.get("plain_text", "") for t in props.get("Name", {}).get("title", [])).strip() or "Untitled"
         due_str = props.get("Due Date", {}).get("date", {})
         due     = parse_notion_date(due_str.get("start")) if due_str else None
+        # Only include if no due date or due within 30 days
+        if due and (due - today).days > 30:
+            continue
         items.append({"name": name, "status": status, "due": due})
     return items
 
@@ -632,7 +631,6 @@ def on_screen_button(screen):
         filtered_quotes = all_quotes[:]
         quote_index     = 0
     refresh_current_screen()
-
 def on_reset(channel):
     global all_quotes, filtered_quotes, quote_index
     print("  → Force reset")
