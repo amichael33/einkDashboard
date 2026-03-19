@@ -35,6 +35,7 @@ except ImportError:
 NOTION_TOKEN      = "REDACTED_NOTION_TOKEN"
 HOMEWORK_DB_ID    = "REDACTED_DB_ID"
 TASKS_DB_ID       = "REDACTED_DB_ID"
+QUOTES_DB_ID      = "REDACTED_DB_ID"
 COUNTDOWNS_DB_ID  = "REDACTED_DB_ID"
 
 CENTRAL = ZoneInfo("America/Chicago")
@@ -196,23 +197,22 @@ def fetch_temperature():
 def fetch_countdowns():
     """Fetch next 5 upcoming Days Until countdowns that aren't done."""
     today   = datetime.now(CENTRAL).date()
-    payload = {
-        "filter": {"and": [
-            {"property": "Mode",  "select":   {"equals": "Days Until"}},
-            {"property": "done",  "checkbox": {"equals": False}},
-            {"property": "Date",  "date":     {"on_or_after": today.isoformat()}},
-        ]},
-        "sorts": [{"property": "Date", "direction": "ascending"}],
-        "page_size": 5,
-    }
-    pages = fetch_notion_db(COUNTDOWNS_DB_ID, payload)
-    items = []
+    payload = {"sorts": [{"property": "Date", "direction": "ascending"}]}
+    pages   = fetch_notion_db(COUNTDOWNS_DB_ID, payload)
+    items   = []
     for page in pages:
         props = page.get("properties", {})
-        name  = "".join(t.get("plain_text", "") for t in props.get("Countdown", {}).get("title", [])).strip() or "Untitled"
+        # Filter: Mode = Days Until, done = False, Date >= today
+        mode = props.get("Mode", {}).get("select", {})
+        if not mode or mode.get("name") != "Days Until":
+            continue
+        done = props.get("done", {}).get("checkbox", False)
+        if done:
+            continue
+        name    = "".join(t.get("plain_text", "") for t in props.get("Countdown", {}).get("title", [])).strip() or "Untitled"
         due_str = props.get("Date", {}).get("date", {})
         due     = parse_notion_date(due_str.get("start")) if due_str else None
-        if due:
+        if due and due >= today:
             days_left = (due - today).days
             items.append({"name": name, "due": due, "days_left": days_left})
     return items[:5]
@@ -602,21 +602,24 @@ def setup_gpio():
                                PIN_ONOFF, PIN_AUTOREF, PIN_SLEEP]:
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-        for i, pin in enumerate(PIN_BIG):
-            s = i + 1
-            GPIO.add_event_detect(pin, GPIO.RISING,
-                callback=lambda ch, s=s: on_screen_button(s), bouncetime=300)
+        try:
+            for i, pin in enumerate(PIN_BIG):
+                s = i + 1
+                GPIO.add_event_detect(pin, GPIO.RISING,
+                    callback=lambda ch, s=s: on_screen_button(s), bouncetime=300)
 
-        GPIO.add_event_detect(PIN_RESET,   GPIO.RISING, callback=on_reset,   bouncetime=300)
-        GPIO.add_event_detect(PIN_NEXT,    GPIO.RISING, callback=on_next,    bouncetime=300)
-        GPIO.add_event_detect(PIN_FILTER,  GPIO.RISING, callback=on_filter,  bouncetime=300)
-        GPIO.add_event_detect(PIN_PREV,    GPIO.RISING, callback=on_prev,    bouncetime=300)
-        GPIO.add_event_detect(PIN_ONOFF,   GPIO.BOTH,   callback=on_onoff,   bouncetime=500)
-        GPIO.add_event_detect(PIN_AUTOREF, GPIO.BOTH,   callback=on_autoref, bouncetime=500)
-        GPIO.add_event_detect(PIN_SLEEP,   GPIO.BOTH,   callback=on_sleep,   bouncetime=500)
-
-        print("✓ GPIO ready.")
-        return GPIO
+            GPIO.add_event_detect(PIN_RESET,   GPIO.RISING, callback=on_reset,   bouncetime=300)
+            GPIO.add_event_detect(PIN_NEXT,    GPIO.RISING, callback=on_next,    bouncetime=300)
+            GPIO.add_event_detect(PIN_FILTER,  GPIO.RISING, callback=on_filter,  bouncetime=300)
+            GPIO.add_event_detect(PIN_PREV,    GPIO.RISING, callback=on_prev,    bouncetime=300)
+            GPIO.add_event_detect(PIN_ONOFF,   GPIO.BOTH,   callback=on_onoff,   bouncetime=500)
+            GPIO.add_event_detect(PIN_AUTOREF, GPIO.BOTH,   callback=on_autoref, bouncetime=500)
+            GPIO.add_event_detect(PIN_SLEEP,   GPIO.BOTH,   callback=on_sleep,   bouncetime=500)
+            print("✓ GPIO ready.")
+            return GPIO
+        except RuntimeError as e:
+            print(f"⚠ GPIO event detection failed ({e}) — running without button support.")
+            return None
     except ImportError:
         print("⚠ RPi.GPIO not available — running without button support.")
         return None
