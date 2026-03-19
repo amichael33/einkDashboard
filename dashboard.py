@@ -398,7 +398,7 @@ def render_homework_screen():
 
         # Advance y for all columns this task spans
         for c in range(start_col, end_col+1):
-            col_task_y[c] = task_y + actual_h + 3
+            col_task_y[c] = task_y + actual_h + 6
 
     # ── Vertical dividers — skip segments covered by multi-day tasks ──
     # Build a set of (col_boundary, y_start, y_end) segments to blank
