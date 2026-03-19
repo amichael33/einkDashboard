@@ -71,10 +71,6 @@ PIN_SLEEP   = 13
 current_screen  = 1
 auto_refresh    = True
 sleeping        = False
-quote_index     = 0
-quote_filter    = None
-all_quotes      = []
-filtered_quotes = []
 
 # ─────────────────────────────────────────────
 #  FONTS
@@ -136,9 +132,21 @@ def fetch_homework():
         status = props.get("Status", {}).get("status", {}).get("name", "Not started")
         due_str = props.get("Due date", {}).get("date", {})
         if due_str and due_str.get("start"):
-            due = parse_notion_date(due_str["start"])
-            if due and monday <= due <= sunday:
-                items.append({"name": name, "status": status, "due": due})
+            start = parse_notion_date(due_str["start"])
+            end   = parse_notion_date(due_str.get("end")) if due_str.get("end") else start
+            # Include if any part of the task falls within this week
+            if start and end and not (end < monday or start > sunday):
+                # Clamp to week bounds
+                clamped_start = max(start, monday)
+                clamped_end   = min(end, sunday)
+                items.append({
+                    "name": name,
+                    "status": status,
+                    "due": start,
+                    "start": clamped_start,
+                    "end": clamped_end,
+                    "multiday": end > start,
+                })
     return items, monday
 
 def fetch_tasks():
@@ -165,19 +173,6 @@ def fetch_tasks():
             continue
         items.append({"name": name, "status": status, "due": due})
     return items
-
-def fetch_quotes():
-    """Fetch a batch of random quotes from ZenQuotes."""
-    try:
-        resp  = requests.get("https://zenquotes.io/api/quotes", timeout=5)
-        data  = resp.json()
-        items = []
-        for q in data:
-            if q.get("q") and q.get("a"):
-                items.append({"quote": q["q"], "author": q["a"], "category": ""})
-        return items
-    except Exception:
-        return [{"quote": "Do the work.", "author": "Unknown", "category": ""}]
 
 def fetch_temperature():
     try:
@@ -251,9 +246,10 @@ def render_homework_screen():
     hw_items, monday = fetch_homework()
     tasks            = fetch_tasks()
 
+    # Group by start date (for single-day tasks) — multi-day handled separately
     homework_by_day = {}
     for item in hw_items:
-        homework_by_day.setdefault(item["due"], []).append(item)
+        homework_by_day.setdefault(item["start"], []).append(item)
 
     img  = Image.new("1", (WIDTH, HEIGHT), 1)
     draw = ImageDraw.Draw(img)
@@ -275,6 +271,14 @@ def render_homework_screen():
     TASK_H     = 38
     COL_TOP    = TOP_H
     COL_BOTTOM = HEIGHT - 1
+
+    # Map week dates to column indices (0-5, col 5 = Sat+Sun)
+    # Col 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat/Sun
+    def date_to_col(d):
+        delta = (d - monday).days
+        if delta < 0 or delta > 6:
+            return None
+        return min(delta, 5)  # sat and sun both → col 5
 
     # Header
     date_str = today.strftime("%A, %B %-d %Y")
@@ -317,7 +321,7 @@ def render_homework_screen():
 
     draw.line([0, TOP_H, WIDTH, TOP_H], fill=0, width=1)
 
-    # Homework columns
+    # ── Column backgrounds and headers ───────────
     DAY_DATES = [monday + timedelta(days=i) for i in range(5)] + [monday + timedelta(days=5)]
     for col in range(COL_COUNT):
         x0       = col * COL_W
@@ -338,28 +342,58 @@ def render_homework_screen():
             day_label = f"Sa {sat.strftime('%-d')}/Su {sun.strftime('%-d')}"
         draw.text((x0+3, COL_TOP+4), day_label, font=f_tiny, fill=hdr_text_fill)
 
-        tasks_day = (homework_by_day.get(monday+timedelta(days=5), []) +
-                     homework_by_day.get(monday+timedelta(days=6), [])) if col == 5 \
-                    else homework_by_day.get(day_date, [])
+    # ── Track vertical position per column ───────
+    col_task_y = [COL_TOP + DAY_HDR_H + 2] * COL_COUNT
 
-        task_y = COL_TOP + DAY_HDR_H + 2
-        for i, task in enumerate(tasks_day):
-            if task_y + TASK_H > COL_BOTTOM - 2:
-                draw.text((x0+3, task_y), f"+{len(tasks_day)-i} more", font=f_tiny, fill=0)
-                break
-            draw.rectangle([x0+2, task_y, x1-2, task_y+TASK_H-2], outline=0, fill=1)
-            max_chars = max(1, (COL_W-8) // 7)
-            lines     = textwrap.wrap(task["name"], width=max_chars)
-            # Draw up to 2 lines of task name
-            draw.text((x0+4, task_y+1), lines[0] if lines else task["name"], font=f_small, fill=0)
-            if len(lines) > 1:
-                draw.text((x0+4, task_y+14), lines[1], font=f_small, fill=0)
-            sym = STATUS_SYMBOLS.get(task["status"], "○")
-            draw.text((x0+4, task_y+27), f"{sym} {task['status']}", font=f_tiny, fill=0)
-            task_y += TASK_H + 1
+    # ── Render tasks — single-day first, then multi-day ──
+    # Sort so multi-day tasks render after single-day in each col
+    sorted_items = sorted(hw_items, key=lambda t: (0 if not t["multiday"] else 1, t["start"]))
 
+    # Track which tasks have already been drawn (by identity)
+    drawn = set()
+
+    for task in sorted_items:
+        tid = id(task)
+        if tid in drawn:
+            continue
+        drawn.add(tid)
+
+        start_col = date_to_col(task["start"])
+        end_col   = date_to_col(task["end"])
+        if start_col is None:
+            continue
+        if end_col is None:
+            end_col = 5
+
+        # x span
+        x0_task = start_col * COL_W + 2
+        x1_task = end_col * COL_W + COL_W - 2
+
+        # Use the start column's y position
+        task_y = col_task_y[start_col]
+        if task_y + TASK_H > COL_BOTTOM - 2:
+            continue
+
+        # Draw the task box spanning columns
+        draw.rectangle([x0_task, task_y, x1_task, task_y+TASK_H-2], outline=0, fill=1)
+
+        # Task name — wider if multi-day
+        span_w    = x1_task - x0_task
+        max_chars = max(1, (span_w - 8) // 7)
+        lines     = textwrap.wrap(task["name"], width=max_chars)
+        draw.text((x0_task+4, task_y+1), lines[0] if lines else task["name"], font=f_small, fill=0)
+        if len(lines) > 1:
+            draw.text((x0_task+4, task_y+14), lines[1], font=f_small, fill=0)
+        sym = STATUS_SYMBOLS.get(task["status"], "○")
+        draw.text((x0_task+4, task_y+27), f"{sym} {task['status']}", font=f_tiny, fill=0)
+
+        # Advance y for all columns this task spans
+        for c in range(start_col, end_col+1):
+            col_task_y[c] = task_y + TASK_H + 1
+
+    # Vertical dividers drawn on top so they show through multi-day tasks
     for col in range(1, COL_COUNT):
-        draw.line([col*COL_W, COL_TOP, col*COL_W, COL_BOTTOM], fill=0, width=1)
+        draw.line([col*COL_W, COL_TOP+DAY_HDR_H, col*COL_W, COL_BOTTOM], fill=0, width=1)
 
     # ── RIGHT PANEL ──────────────────────────────
     px         = HW_WIDTH
@@ -481,58 +515,6 @@ def render_temperature_screen():
     return img
 
 
-def render_quotes_screen():
-    global all_quotes, filtered_quotes, quote_index
-
-    img  = Image.new("1", (WIDTH, HEIGHT), 1)
-    draw = ImageDraw.Draw(img)
-
-    f_large  = load_font(19, bold=True)
-    f_quote  = load_font(22)
-    f_author = load_font(16, bold=True)
-    f_tiny   = load_font(11)
-
-    today    = datetime.now(CENTRAL).date()
-    date_str = today.strftime("%A, %B %-d %Y")
-    draw.text((4, 3), date_str, font=f_large, fill=0)
-    draw.line([0, 26, WIDTH, 26], fill=0, width=1)
-
-    if not filtered_quotes:
-        draw.text((20, 200), "No quotes available.", font=f_large, fill=0)
-        draw_screen_indicator(draw, 5, f_tiny)
-        return img
-
-    q = filtered_quotes[quote_index % len(filtered_quotes)]
-
-    # Index indicator
-    idx_str = f"{(quote_index % len(filtered_quotes)) + 1} / {len(filtered_quotes)}"
-    draw.text((WIDTH - int(draw.textlength(idx_str, font=f_tiny)) - 6, HEIGHT - 20), idx_str, font=f_tiny, fill=0)
-
-    # Opening quote mark
-    MARGIN = 40
-    draw.text((MARGIN - 20, 40), "\u201c", font=load_font(60, bold=True), fill=0)
-
-    # Quote text
-    max_chars = (WIDTH - MARGIN * 2) // 12
-    lines     = textwrap.wrap(q["quote"], width=max_chars)
-    y         = 80
-    LINE_H    = 32
-    for line in lines:
-        draw.text((MARGIN, y), line, font=f_quote, fill=0)
-        y += LINE_H
-
-    # Author
-    y += 10
-    draw.text((MARGIN, y), f"\u201d  \u2014 {q['author']}", font=f_author, fill=0)
-
-    # Button hints
-    hints = "Small 4: Prev  |  Small 2: Next  |  Small 1: New batch"
-    draw.text((10, HEIGHT - 20), hints, font=f_tiny, fill=0)
-
-    draw_screen_indicator(draw, 5, f_tiny)
-    return img
-
-
 def render_reserved_screen(screen_num):
     img  = Image.new("1", (WIDTH, HEIGHT), 1)
     draw = ImageDraw.Draw(img)
@@ -625,21 +607,13 @@ def setup_gpio():
         return None
 
 def on_screen_button(screen):
-    global current_screen, all_quotes, filtered_quotes, quote_index
+    global current_screen
     print(f"  → Screen {screen}")
     current_screen = screen
-    if screen == 5:
-        all_quotes      = fetch_quotes()
-        filtered_quotes = all_quotes[:]
-        quote_index     = 0
     refresh_current_screen()
+
 def on_reset(channel):
-    global all_quotes, filtered_quotes, quote_index
     print("  → Force reset")
-    if current_screen == 5:
-        all_quotes      = fetch_quotes()
-        filtered_quotes = all_quotes[:]
-        quote_index     = 0
     refresh_current_screen()
 
 def on_next(channel):
@@ -699,17 +673,7 @@ def auto_refresh_loop():
 #  MAIN
 # ─────────────────────────────────────────────
 def main():
-    global all_quotes, filtered_quotes
-
     print("→ Starting dashboard…")
-
-    print("→ Loading quotes…")
-    try:
-        all_quotes      = fetch_quotes()
-        filtered_quotes = all_quotes[:]
-        print(f"  Loaded {len(all_quotes)} quotes.")
-    except Exception as e:
-        print(f"  ⚠ Quotes fetch failed: {e}")
 
     refresh_current_screen()
 
