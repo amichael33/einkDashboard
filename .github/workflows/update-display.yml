@@ -4,11 +4,26 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 5 * * *'    # midnight Central (UTC-5)
-    - cron: '30 13 * * *'  # 8:30am Central
-    - cron: '0 17 * * *'   # 12:00pm Central
-    - cron: '0 21 * * *'   # 4:00pm Central
-    - cron: '30 23 * * *'  # 6:30pm Central
+    # Hourly 6am–11pm Central (UTC-5 in winter, UTC-6 in summer)
+    # Using UTC-5 (CST) — adjust +1hr for CDT if needed
+    - cron: '0 11 * * *'   # 6am Central
+    - cron: '0 12 * * *'   # 7am Central
+    - cron: '0 13 * * *'   # 8am Central
+    - cron: '0 14 * * *'   # 9am Central
+    - cron: '0 15 * * *'   # 10am Central
+    - cron: '0 16 * * *'   # 11am Central
+    - cron: '0 17 * * *'   # 12pm Central
+    - cron: '0 18 * * *'   # 1pm Central
+    - cron: '0 19 * * *'   # 2pm Central
+    - cron: '0 20 * * *'   # 3pm Central
+    - cron: '0 21 * * *'   # 4pm Central
+    - cron: '0 22 * * *'   # 5pm Central
+    - cron: '0 23 * * *'   # 6pm Central
+    - cron: '0 0 * * *'    # 7pm Central
+    - cron: '0 1 * * *'    # 8pm Central
+    - cron: '0 2 * * *'    # 9pm Central
+    - cron: '0 3 * * *'    # 10pm Central
+    - cron: '0 4 * * *'    # 11pm Central
 
 jobs:
   update:
