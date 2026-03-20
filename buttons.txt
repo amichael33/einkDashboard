@@ -1,0 +1,13 @@
+main - homework + tasks + countdowns
+calendar - google calendar
+photos
+weather
+goals
+on/off
+Refresh — force re-fetch data from Notion without resetting the screen
+force reset - re-renders
+next - specific to each screen
+previous - specific to each screen
+
+
+send text to my phone (0000000000@tmomail.net)
