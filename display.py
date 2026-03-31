@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 from PIL import ImageFont
 from config import WAVESHARE_LIB, PREVIEW_PATH, ERROR_PATH
 
@@ -49,7 +50,7 @@ def draw_screen_indicator(draw, screen_num, f_tiny, width, height):
 
 def push(img):
     """Send a Pillow image to the Waveshare 7.5" V2 display."""
-    try:
+    def _try_push():
         sys.path.insert(0, WAVESHARE_LIB)
         from waveshare_epd import epd7in5_V2
         epd = epd7in5_V2.EPD()
@@ -57,11 +58,27 @@ def push(img):
         epd.Clear()
         epd.display(epd.getbuffer(img))
         epd.sleep()
+
+    try:
+        _try_push()
         print("✓ Display updated.")
     except ImportError:
         img.save(PREVIEW_PATH)
         print(f"⚠ Waveshare lib not found — saved preview to {PREVIEW_PATH}")
     except Exception as e:
+        # Common when another process is using the Waveshare HAT, or a prior crash
+        # left GPIO in a bad state. Try a single GPIO cleanup + retry.
+        if "GPIO busy" in str(e):
+            try:
+                import RPi.GPIO as GPIO
+                GPIO.cleanup()
+                time.sleep(0.2)
+                _try_push()
+                print("✓ Display updated. (after GPIO cleanup)")
+                return
+            except Exception:
+                pass
+
         print(f"✗ Display error: {e}")
         img.save(ERROR_PATH)
         raise
