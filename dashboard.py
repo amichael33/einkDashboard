@@ -6,11 +6,9 @@ Controls via USB keypad. No GPIO required.
 Key mapping:
   1-5       → switch to screen 1-5
   Enter     → force reset / re-render current screen
-  +         → next screen
-  -         → previous screen
-  *         → toggle sleep
-  /         → toggle auto-refresh
   0         → filter (passed to current screen if supported)
+  a         → (blank)
+  b         → photos
 """
 
 import os
@@ -100,18 +98,15 @@ def setup_keyboard():
     try:
         import keyboard as kb
 
-        kb.on_press_key("1",     lambda _: handle_key("1"))
-        kb.on_press_key("2",     lambda _: handle_key("2"))
-        kb.on_press_key("3",     lambda _: handle_key("3"))
-        kb.on_press_key("4",     lambda _: handle_key("4"))
-        kb.on_press_key("5",     lambda _: handle_key("5"))
-        kb.on_press_key("b",     lambda _: handle_key("b"))
-        kb.on_press_key("enter", lambda _: handle_key("enter"))
-        kb.on_press_key("+",     lambda _: handle_key("+"))
-        kb.on_press_key("-",     lambda _: handle_key("-"))
-        kb.on_press_key("*",     lambda _: handle_key("*"))
-        kb.on_press_key("/",     lambda _: handle_key("/"))
-        kb.on_press_key("0",     lambda _: handle_key("0"))
+        def bind(key_name):
+            try:
+                kb.on_press_key(key_name, lambda _: handle_key(key_name))
+            except Exception as e:
+                print(f"⚠ Skipping key bind {key_name!r}: {e}")
+
+        # Bind only keys your 2x6 keypad actually emits (per evtest): 0-9, a, b, enter.
+        for k in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "a", "b", "enter"]:
+            bind(k)
 
         print("✓ Keyboard listener ready.")
         return kb
