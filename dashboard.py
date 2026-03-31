@@ -26,9 +26,9 @@ from screens import homework, calendar, photos, weather, goals
 SCREENS = {
     1: homework,
     2: calendar,
-    3: photos,
+    3: goals,
     4: weather,
-    5: goals,
+    5: photos,
 }
 
 #  STATE
@@ -89,6 +89,12 @@ def handle_key(key):
             screen.on_filter()
             refresh_current_screen()
 
+    elif key == "b":
+        # Dedicated key to jump straight to the photos screen.
+        current_screen = 5
+        print("  → Photos (key b)")
+        refresh_current_screen()
+
 def setup_keyboard():
     """Listen for USB keypad input using the 'keyboard' library."""
     try:
@@ -99,6 +105,7 @@ def setup_keyboard():
         kb.on_press_key("3",     lambda _: handle_key("3"))
         kb.on_press_key("4",     lambda _: handle_key("4"))
         kb.on_press_key("5",     lambda _: handle_key("5"))
+        kb.on_press_key("b",     lambda _: handle_key("b"))
         kb.on_press_key("enter", lambda _: handle_key("enter"))
         kb.on_press_key("+",     lambda _: handle_key("+"))
         kb.on_press_key("-",     lambda _: handle_key("-"))
