@@ -167,8 +167,6 @@ def render():
     date_w   = int(draw.textlength(date_str, font=f_date))
     draw.text(((WIDTH - date_w) // 2, 23), date_str, font=f_date, fill=0)
 
-    draw.line([0, HEADER_H, WIDTH, HEADER_H], fill=0, width=1)
-
     # ── FETCH ─────────────────────────────────────
     try:
         weather = fetch_weather()
@@ -239,8 +237,7 @@ def render():
     fx = LEFT_ICO_W + (LEFT_TEMP_W - fw) // 2
     draw.text((fx, ty + 48), feels_str, font=f_feels, fill=0)
 
-    # Vertical divider: left half / right half
-    draw.line([HALF_W, MID_TOP, HALF_W, MID_BOT], fill=0, width=1)
+    # (no divider between left and right halves)
 
     # ── RIGHT HALF ───────────────────────────────
     # Split into col A and col B
@@ -270,19 +267,13 @@ def render():
         y0 = MID_TOP + i * DP_H
         draw_data_point(img, draw, COL_A_X, y0, COL_W, DP_H,
                         icon_name, label, value, f_label, f_value)
-        # Horizontal divider between rows (not after last)
-        if i < 3:
-            draw.line([COL_A_X, y0+DP_H, COL_A_X+COL_W-1, y0+DP_H], fill=0, width=1)
 
-    # Vertical divider between col A and col B
-    draw.line([COL_B_X, MID_TOP, COL_B_X, MID_BOT], fill=0, width=1)
+    # (no divider between col A and col B)
 
     for i, (icon_name, label, value) in enumerate(COL_B):
         y0 = MID_TOP + i * DP_H
         draw_data_point(img, draw, COL_B_X, y0, COL_W, DP_H,
                         icon_name, label, value, f_label, f_value)
-        if i < 3:
-            draw.line([COL_B_X, y0+DP_H, COL_B_X+COL_W-1, y0+DP_H], fill=0, width=1)
 
     # ── FORECAST ─────────────────────────────────
     draw.line([0, MID_BOT, WIDTH, MID_BOT], fill=0, width=1)
