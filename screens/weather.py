@@ -1,10 +1,25 @@
 #!/usr/bin/env python3
 """
 Screen 4 — Weather
-Layout matches reference image:
-  Header  : location name + date centered
-  Middle  : big icon + temp (left) | 3x3 data points grid (right)
-  Bottom  : 7-day forecast cards
+
+Layout:
+  ┌─────────────────────────────────────┐
+  │     Location Name  /  Date          │  ← HEADER
+  ├──────────────┬──────────────────────┤
+  │  LEFT HALF   │     RIGHT HALF       │
+  │  ┌────┬────┐ │  ┌──────┬──────┐    │
+  │  │icon│temp│ │  │col A │col B │    │  ← MIDDLE
+  │  │    │feels│ │  │      │      │    │
+  │  └────┴────┘ │  └──────┴──────┘    │
+  ├──────────────┴──────────────────────┤
+  │  Mon  Tue  Wed  Thu  Fri  Sat  Sun  │  ← FORECAST
+  └─────────────────────────────────────┘
+
+Left half  → split left/right: icon | temp + feels like
+Right half → split left/right:
+  Col A: Sunrise, Wind, Pressure, Visibility
+  Col B: Sunset, Humidity, UV Index, Air Quality
+Each data point: icon left, label small above value, value bold
 """
 
 import os
@@ -17,7 +32,7 @@ from config import WIDTH, HEIGHT, CENTRAL
 from display import load_font, draw_screen_indicator
 
 # ─────────────────────────────────────────────
-#  LOCATION — update when moving to Austin
+#  LOCATION
 # ─────────────────────────────────────────────
 LATITUDE  = 29.7604
 LONGITUDE = -95.3698
@@ -29,27 +44,15 @@ ICONS_DIR = "/home/amichael/Desktop/eink/icons"
 # ─────────────────────────────────────────────
 def wmo_to_icon(code, is_day=1):
     s = "d" if is_day else "n"
-    if code == 0:                        return f"01{s}"
-    if code in (1, 2):                   return f"02{s}"
-    if code == 3:                        return "04d"
-    if code in (45, 48):                 return "50d"
-    if code in (51, 53, 61, 63, 80, 81): return f"10{s}"
-    if code in (55, 65, 82):             return "09d"
+    if code == 0:                            return f"01{s}"
+    if code in (1, 2):                       return f"02{s}"
+    if code == 3:                            return "04d"
+    if code in (45, 48):                     return "50d"
+    if code in (51, 53, 61, 63, 80, 81):     return f"10{s}"
+    if code in (55, 65, 82):                 return "09d"
     if code in (56,57,66,67,71,73,75,77,85,86): return "13d"
-    if code in (95, 96, 99):             return "11d"
+    if code in (95, 96, 99):                 return "11d"
     return f"01{s}"
-
-def wmo_to_desc(code):
-    MAP = {
-        0:"Clear sky", 1:"Mainly clear", 2:"Partly cloudy", 3:"Overcast",
-        45:"Fog", 48:"Icy fog",
-        51:"Light drizzle", 53:"Drizzle", 55:"Heavy drizzle",
-        61:"Light rain", 63:"Rain", 65:"Heavy rain",
-        71:"Light snow", 73:"Snow", 75:"Heavy snow", 77:"Snow grains",
-        80:"Showers", 81:"Showers", 82:"Heavy showers",
-        95:"Thunderstorm", 96:"T-storm/hail", 99:"T-storm/hail",
-    }
-    return MAP.get(code, "Unknown")
 
 def wind_arrow(deg):
     return ["↑","↗","→","↘","↓","↙","←","↖"][round(deg/45)%8]
@@ -70,10 +73,10 @@ def load_icon(name, size):
         ph = Image.new("1", size, 1)
         ImageDraw.Draw(ph).rectangle([0,0,size[0]-1,size[1]-1], outline=0)
         return ph
-    src  = Image.open(path).convert("RGBA")
-    bg   = Image.new("RGBA", src.size, (255,255,255,255))
+    src = Image.open(path).convert("RGBA")
+    bg  = Image.new("RGBA", src.size, (255,255,255,255))
     bg.paste(src, mask=src.split()[3])
-    bw   = bg.convert("L").point(lambda p: 255 if p > 180 else 0, "1")
+    bw  = bg.convert("L").point(lambda p: 255 if p > 180 else 0, "1")
     return bw.resize(size, Image.LANCZOS)
 
 def get_hourly_value(hourly, key, now):
@@ -97,7 +100,7 @@ def fetch_weather():
                     "windspeed_10m,winddirection_10m,relativehumidity_2m,"
                     "surface_pressure,visibility,is_day",
         "daily":    "weathercode,temperature_2m_max,temperature_2m_min,"
-                    "sunrise,sunset,precipitation_probability_max",
+                    "sunrise,sunset",
         "temperature_unit": "fahrenheit",
         "windspeed_unit":   "mph",
         "timezone":         "America/Chicago",
@@ -116,6 +119,28 @@ def fetch_aqi():
     return r.json()
 
 # ─────────────────────────────────────────────
+#  DRAW DATA POINT
+# ─────────────────────────────────────────────
+def draw_data_point(img, draw, x, y, w, h, icon_name, label, value, f_label, f_value):
+    """
+    Draw a single data point cell:
+    [icon] label (small)
+           value (bold)
+    """
+    ICO = 24
+    icon = load_icon(icon_name, (ICO, ICO))
+    # Center icon vertically in cell
+    ico_y = y + (h - ICO) // 2
+    img.paste(icon, (x + 2, ico_y))
+
+    tx = x + ICO + 6
+    # Center text block vertically
+    block_h = 12 + 16  # label + value
+    ty = y + (h - block_h) // 2
+    draw.text((tx, ty),      label, font=f_label, fill=0)
+    draw.text((tx, ty + 13), value, font=f_value, fill=0)
+
+# ─────────────────────────────────────────────
 #  RENDER
 # ─────────────────────────────────────────────
 def render():
@@ -123,22 +148,24 @@ def render():
     draw = ImageDraw.Draw(img)
     now  = datetime.now(CENTRAL)
 
-    f_title  = load_font(20, bold=True)
-    f_date   = load_font(14)
-    f_huge   = load_font(44, bold=True)
-    f_med    = load_font(13, bold=True)
-    f_small  = load_font(11)
+    f_title  = load_font(19, bold=True)
+    f_date   = load_font(13)
+    f_huge   = load_font(42, bold=True)
+    f_feels  = load_font(12)
+    f_label  = load_font(10)
+    f_value  = load_font(13, bold=True)
     f_tiny   = load_font(10)
+    f_med    = load_font(12, bold=True)
 
     # ── HEADER ───────────────────────────────────
-    HEADER_H = 44
+    HEADER_H = 42
 
     loc_w = int(draw.textlength(LOCATION, font=f_title))
     draw.text(((WIDTH - loc_w) // 2, 2), LOCATION, font=f_title, fill=0)
 
     date_str = now.strftime("%A, %B %-d")
     date_w   = int(draw.textlength(date_str, font=f_date))
-    draw.text(((WIDTH - date_w) // 2, 24), date_str, font=f_date, fill=0)
+    draw.text(((WIDTH - date_w) // 2, 23), date_str, font=f_date, fill=0)
 
     draw.line([0, HEADER_H, WIDTH, HEADER_H], fill=0, width=1)
 
@@ -148,7 +175,7 @@ def render():
         aqi_raw = fetch_aqi()
     except Exception as e:
         print(f"  ⚠ Weather fetch failed: {e}")
-        draw.text((20, 180), "Weather unavailable", font=f_med, fill=0)
+        draw.text((20, 180), "Weather unavailable", font=f_value, fill=0)
         draw_screen_indicator(draw, 4, f_tiny, WIDTH, HEIGHT)
         return img
 
@@ -174,72 +201,88 @@ def render():
     uv_str  = str(round(uv_val, 2)) if uv_val  is not None else "N/A"
     aqi_str = f"{round(aqi_val)} {aqi_label(aqi_val)}" if aqi_val is not None else "N/A"
 
-    sunrise_str, sunset_str = "N/A", "N/A"
+    sunrise_str = sunset_str = "N/A"
     if daily.get("sunrise"):
         sunrise_str = datetime.fromisoformat(daily["sunrise"][0]).astimezone(CENTRAL).strftime("%-I:%M %p")
     if daily.get("sunset"):
         sunset_str  = datetime.fromisoformat(daily["sunset"][0]).astimezone(CENTRAL).strftime("%-I:%M %p")
 
-    # ── ZONES ─────────────────────────────────────
-    FORECAST_H = 100
+    # ── LAYOUT ───────────────────────────────────
+    FORECAST_H = 95
     MID_TOP    = HEADER_H + 1
     MID_BOT    = HEIGHT - FORECAST_H - 1
     MID_H      = MID_BOT - MID_TOP
-    CURRENT_W  = 200
 
-    # ── LEFT: big icon + temp ─────────────────────
-    ICO_SZ = 80
+    HALF_W     = WIDTH // 2          # left half / right half split
+
+    # ── LEFT HALF ────────────────────────────────
+    # Split into icon section and temp section
+    LEFT_ICO_W  = HALF_W // 2
+    LEFT_TEMP_W = HALF_W - LEFT_ICO_W
+
+    # Big weather icon — centered in icon section
+    ICO_SZ = 72
     icon   = load_icon(wmo_to_icon(wmo, is_day), (ICO_SZ, ICO_SZ))
-    ico_x  = (CURRENT_W - ICO_SZ) // 2
-    ico_y  = MID_TOP + 6
+    ico_x  = (LEFT_ICO_W - ICO_SZ) // 2
+    ico_y  = MID_TOP + (MID_H - ICO_SZ) // 2
     img.paste(icon, (ico_x, ico_y))
 
+    # Temperature — centered in temp section
     temp_str = f"{cur_temp}°F"
     tw = int(draw.textlength(temp_str, font=f_huge))
-    draw.text(((CURRENT_W - tw) // 2, ico_y + ICO_SZ + 4), temp_str, font=f_huge, fill=0)
+    tx = LEFT_ICO_W + (LEFT_TEMP_W - tw) // 2
+    ty = MID_TOP + MID_H // 2 - 30
+    draw.text((tx, ty), temp_str, font=f_huge, fill=0)
 
     feels_str = f"Feels Like {feels}°"
-    fw = int(draw.textlength(feels_str, font=f_small))
-    draw.text(((CURRENT_W - fw) // 2, ico_y + ICO_SZ + 52), feels_str, font=f_small, fill=0)
+    fw = int(draw.textlength(feels_str, font=f_feels))
+    fx = LEFT_ICO_W + (LEFT_TEMP_W - fw) // 2
+    draw.text((fx, ty + 48), feels_str, font=f_feels, fill=0)
 
-    draw.line([CURRENT_W, MID_TOP, CURRENT_W, MID_BOT], fill=0, width=1)
+    # Vertical divider: left half / right half
+    draw.line([HALF_W, MID_TOP, HALF_W, MID_BOT], fill=0, width=1)
 
-    # ── RIGHT: 3×3 data points grid ───────────────
-    DATA_X  = CURRENT_W + 1
-    DATA_W  = WIDTH - CURRENT_W
-    DP_COLS = 3
-    DP_ROWS = 3
-    DP_W    = DATA_W  // DP_COLS
-    DP_H    = MID_H   // DP_ROWS
-    DP_ICO  = 22
+    # ── RIGHT HALF ───────────────────────────────
+    # Split into col A and col B
+    RIGHT_X  = HALF_W + 1
+    RIGHT_W  = WIDTH - HALF_W - 1
+    COL_W    = RIGHT_W // 2
+    COL_A_X  = RIGHT_X
+    COL_B_X  = RIGHT_X + COL_W
 
-    DATA_POINTS = [
+    # 4 data points per column, evenly spaced vertically
+    DP_H = MID_H // 4
+
+    COL_A = [
         ("sunrise",    "Sunrise",     sunrise_str),
-        ("wind",       "Wind",        f"{wind_spd} mph  {wind_arrow(wind_deg)}"),
+        ("wind",       "Wind",        f"{wind_spd} mph {wind_arrow(wind_deg)}"),
+        ("pressure",   "Pressure",    f"{pressure} hPa"),
+        ("visibility", "Visibility",  f"{vis_str} mi"),
+    ]
+    COL_B = [
         ("sunset",     "Sunset",      sunset_str),
         ("humidity",   "Humidity",    f"{humidity}%"),
-        ("pressure",   "Pressure",    f"{pressure} hPa"),
         ("uvi",        "UV Index",    uv_str),
-        ("visibility", "Visibility",  f"{vis_str} mi"),
         ("aqi",        "Air Quality", aqi_str),
-        ("humidity",   "Condition",   wmo_to_desc(wmo)),
     ]
 
-    for idx, (icon_name, label, value) in enumerate(DATA_POINTS):
-        col = idx % DP_COLS
-        row = idx // DP_COLS
-        x0  = DATA_X + col * DP_W
-        y0  = MID_TOP + row * DP_H
+    for i, (icon_name, label, value) in enumerate(COL_A):
+        y0 = MID_TOP + i * DP_H
+        draw_data_point(img, draw, COL_A_X, y0, COL_W, DP_H,
+                        icon_name, label, value, f_label, f_value)
+        # Horizontal divider between rows (not after last)
+        if i < 3:
+            draw.line([COL_A_X, y0+DP_H, COL_A_X+COL_W-1, y0+DP_H], fill=0, width=1)
 
-        draw.rectangle([x0, y0, x0+DP_W-1, y0+DP_H-1], outline=0, fill=None)
+    # Vertical divider between col A and col B
+    draw.line([COL_B_X, MID_TOP, COL_B_X, MID_BOT], fill=0, width=1)
 
-        dp_icon = load_icon(icon_name, (DP_ICO, DP_ICO))
-        img.paste(dp_icon, (x0+4, y0+(DP_H-DP_ICO)//2))
-
-        tx = x0 + DP_ICO + 8
-        ty = y0 + 4
-        draw.text((tx, ty),    label, font=f_tiny, fill=0)
-        draw.text((tx, ty+13), value, font=f_med,  fill=0)
+    for i, (icon_name, label, value) in enumerate(COL_B):
+        y0 = MID_TOP + i * DP_H
+        draw_data_point(img, draw, COL_B_X, y0, COL_W, DP_H,
+                        icon_name, label, value, f_label, f_value)
+        if i < 3:
+            draw.line([COL_B_X, y0+DP_H, COL_B_X+COL_W-1, y0+DP_H], fill=0, width=1)
 
     # ── FORECAST ─────────────────────────────────
     draw.line([0, MID_BOT, WIDTH, MID_BOT], fill=0, width=1)
@@ -247,7 +290,7 @@ def render():
     FC_COUNT = 7
     FC_W     = WIDTH // FC_COUNT
     FC_TOP   = MID_BOT + 2
-    FC_ICO   = 32
+    FC_ICO   = 30
 
     dates    = daily.get("time", [])
     hi_list  = daily.get("temperature_2m_max", [])
@@ -266,24 +309,26 @@ def render():
         day_name = day_dt.strftime("%a")
         is_tmrw  = (i == 0)
 
+        # Box border
+        draw.rectangle([x0+1, FC_TOP, x1-1, HEIGHT-2], outline=0, fill=1)
+
+        # Day name header
         hdr_fill = 0 if is_tmrw else 1
         txt_fill = 1 if is_tmrw else 0
-        draw.rectangle([x0, FC_TOP, x1, FC_TOP+16], fill=hdr_fill)
+        draw.rectangle([x0+1, FC_TOP, x1-1, FC_TOP+15], fill=hdr_fill)
         dn_w = int(draw.textlength(day_name, font=f_med))
         draw.text((x0+(FC_W-dn_w)//2, FC_TOP+1), day_name, font=f_med, fill=txt_fill)
 
+        # Icon
         fc_icon = load_icon(wmo_to_icon(wmo_list[di] if di < len(wmo_list) else 0), (FC_ICO, FC_ICO))
-        img.paste(fc_icon, (x0+(FC_W-FC_ICO)//2, FC_TOP+18))
+        img.paste(fc_icon, (x0+(FC_W-FC_ICO)//2, FC_TOP+17))
 
+        # High / Low
         hi = round(hi_list[di]) if di < len(hi_list) else "--"
         lo = round(lo_list[di]) if di < len(lo_list) else "--"
-
-        hl_str = f"{hi}° / {lo}°"
+        hl_str = f"{hi}°/{lo}°"
         hl_w   = int(draw.textlength(hl_str, font=f_tiny))
-        draw.text((x0+(FC_W-hl_w)//2, FC_TOP+52), hl_str, font=f_tiny, fill=0)
-
-        if i > 0:
-            draw.line([x0, FC_TOP, x0, HEIGHT-1], fill=0, width=1)
+        draw.text((x0+(FC_W-hl_w)//2, FC_TOP+49), hl_str, font=f_tiny, fill=0)
 
     draw_screen_indicator(draw, 4, f_tiny, WIDTH, HEIGHT)
     return img
