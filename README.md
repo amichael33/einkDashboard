@@ -1,4 +1,4 @@
-# E-Ink Dashboard
+# E-Ink Dashboard -- need to update
 
 A Raspberry Pi-powered e-ink display dashboard that syncs with Notion to show a weekly homework view, priority tasks, and daily progress — refreshed automatically throughout the day.
 
