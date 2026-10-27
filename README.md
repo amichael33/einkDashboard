@@ -87,15 +87,16 @@ git clone https://github.com/waveshare/e-Paper.git
 pip3 install requests pillow RPi.GPIO spidev --break-system-packages
 ```
 
-### 4. Configure Notion credentials
-In `dashboard.py`, set:
-```python
-NOTION_TOKEN   = "your_integration_token"
-HOMEWORK_DB_ID = "your_homework_database_id"
-TASKS_DB_ID    = "your_tasks_database_id"
+### 4. Configure credentials
+Secrets never go in the repo. Copy the example config into the data folder on the Pi (`~/Desktop/eink` by default, or set `EINK_HOME`) and fill it in:
+```bash
+mkdir -p ~/Desktop/eink
+cp config_local.example.py ~/Desktop/eink/config_local.py
+nano ~/Desktop/eink/config_local.py
 ```
+`config_local.py` is gitignored, and environment variables with the same names (e.g. `NOTION_TOKEN`) override it. Put your Google Calendar `credentials.json` (and the generated `token.json`) in the same folder.
 
-To get these:
+To get the Notion values:
 - Create an integration at [notion.so/my-integrations](https://www.notion.so/my-integrations)
 - Share both databases with the integration
 - Copy the DB ID from each database's URL (the 32-char string before `?v=`)
@@ -111,12 +112,20 @@ sudo ./svc.sh install
 sudo ./svc.sh start
 ```
 
+> **Public repo?** The workflow only runs on pushes to `main` and on a schedule, never on pull requests, so outside contributors can't run code on your Pi. Keep it that way, and under **Settings → Actions → General** set fork pull request workflows to require approval.
+
 ---
 
 ## File structure
 ```
 .
 ├── dashboard.py                        # main script
+├── config.py                           # constants; loads config_local.py
+├── config_local.example.py             # template for your private settings
+├── display.py                          # Waveshare driver / preview output
+├── notion.py                           # Notion API helpers
+├── screens/                            # one module per screen
+├── icons/                              # weather and moon icons
 ├── .github/
 │   └── workflows/
 │       └── update-display.yml          # GitHub Actions schedule

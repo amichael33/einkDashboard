@@ -1,0 +1,12 @@
+# Secrets and personal settings
+config_local.py
+credentials.json
+token.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Generated previews
+*_preview.png

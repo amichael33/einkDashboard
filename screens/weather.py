@@ -28,16 +28,11 @@ from datetime import datetime
 
 from PIL import Image, ImageDraw
 
-from config import WIDTH, HEIGHT, CENTRAL
+from config import (
+    WIDTH, HEIGHT, CENTRAL, BASE_DIR,
+    LATITUDE, LONGITUDE, LOCATION, ICONS_DIR,
+)
 from display import load_font, draw_screen_indicator
-
-# ─────────────────────────────────────────────
-#  LOCATION
-# ─────────────────────────────────────────────
-LATITUDE  = 29.7604
-LONGITUDE = -95.3698
-LOCATION  = "Houston, Texas"
-ICONS_DIR = "/home/amichael/Desktop/eink/icons"
 
 # ─────────────────────────────────────────────
 #  HELPERS
@@ -327,5 +322,5 @@ def render():
 
 if __name__ == "__main__":
     img = render()
-    img.save("/home/amichael/Desktop/eink/weather_preview.png")
+    img.save(os.path.join(BASE_DIR, "weather_preview.png"))
     print("Saved weather_preview.png")
