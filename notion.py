@@ -46,6 +46,21 @@ def get_text(props, key):
     return "".join(t.get("plain_text", "") for t in blocks).strip()
 
 #  HOMEWORK
+_class_names = {}
+
+def get_class_name(page_id):
+    """Short class label (e.g. "CS 311") for a related Courses page, cached per run."""
+    if page_id not in _class_names:
+        try:
+            resp = requests.get(f"https://api.notion.com/v1/pages/{page_id}",
+                                headers=NOTION_HEADERS, timeout=10)
+            resp.raise_for_status()
+            props = resp.json().get("properties", {})
+            _class_names[page_id] = get_text(props, "class") or get_text(props, "Course Name")
+        except requests.RequestException:
+            _class_names[page_id] = ""
+    return _class_names[page_id]
+
 def fetch_homework():
     monday, sunday = get_week_bounds()
     payload = {"sorts": [{"property": "Due date", "direction": "ascending"}]}
@@ -53,7 +68,7 @@ def fetch_homework():
     items   = []
     for page in pages:
         props  = page.get("properties", {})
-        name   = get_text(props, "Name") or "Untitled"
+        name   = get_text(props, "Assignment Name") or get_text(props, "Name") or "Untitled"
         status = props.get("Status", {}).get("status", {}).get("name", "Not started")
         due_str = props.get("Due date", {}).get("date", {})
         if due_str and due_str.get("start"):
@@ -62,8 +77,10 @@ def fetch_homework():
             if start and end and not (end < monday or start > sunday):
                 clamped_start = max(start, monday)
                 clamped_end   = min(end, sunday)
+                classes = props.get("Class", {}).get("relation", [])
                 items.append({
                     "name":     name,
+                    "class":    get_class_name(classes[0]["id"]) if classes else "",
                     "status":   status,
                     "due":      start,
                     "start":    clamped_start,

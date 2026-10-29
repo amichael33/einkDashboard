@@ -38,12 +38,13 @@ sleeping       = False
 
 def refresh_current_screen():
     if sleeping:
-        display.push(display.render_sleep_screen(CENTRAL, WIDTH, HEIGHT))
+        display.push(display.render_sleep_screen(CENTRAL, WIDTH, HEIGHT), "sleep")
         return
     print(f"→ Rendering screen {current_screen}…")
     try:
-        img = SCREENS[current_screen].render()
-        display.push(img)
+        screen = SCREENS[current_screen]
+        img    = screen.render()
+        display.push(img, f"{current_screen}_{screen.__name__.split('.')[-1]}")
     except Exception as e:
         print(f"✗ Screen {current_screen} render failed: {e}")
 

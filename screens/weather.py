@@ -158,7 +158,7 @@ def render():
     loc_w = int(draw.textlength(LOCATION, font=f_title))
     draw.text(((WIDTH - loc_w) // 2, 2), LOCATION, font=f_title, fill=0)
 
-    date_str = now.strftime("%A, %B %-d")
+    date_str = now.strftime("%A, %B") + f" {now.day}"
     date_w   = int(draw.textlength(date_str, font=f_date))
     draw.text(((WIDTH - date_w) // 2, 23), date_str, font=f_date, fill=0)
 
@@ -196,9 +196,9 @@ def render():
 
     sunrise_str = sunset_str = "N/A"
     if daily.get("sunrise"):
-        sunrise_str = datetime.fromisoformat(daily["sunrise"][0]).astimezone(CENTRAL).strftime("%-I:%M %p")
+        sunrise_str = datetime.fromisoformat(daily["sunrise"][0]).astimezone(CENTRAL).strftime("%I:%M %p").lstrip("0")
     if daily.get("sunset"):
-        sunset_str  = datetime.fromisoformat(daily["sunset"][0]).astimezone(CENTRAL).strftime("%-I:%M %p")
+        sunset_str  = datetime.fromisoformat(daily["sunset"][0]).astimezone(CENTRAL).strftime("%I:%M %p").lstrip("0")
 
     # ── LAYOUT ───────────────────────────────────
     FORECAST_H = 95

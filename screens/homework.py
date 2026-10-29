@@ -44,7 +44,7 @@ def render():
     COL_BOTTOM = HEIGHT - 1
 
     # ── HEADER ───────────────────────────────────
-    date_str = today.strftime("%A, %B %-d %Y")
+    date_str = today.strftime("%A, %B") + f" {today.day} " + today.strftime("%Y")
     draw.text((4, 3), date_str, font=f_large, fill=0)
     draw.line([0, HEADER_H, WIDTH, HEADER_H], fill=0, width=1)
 
@@ -100,11 +100,11 @@ def render():
         draw.rectangle([x0, COL_TOP, x1, COL_TOP+DAY_HDR_H], fill=hdr_fill)
 
         if col < 5:
-            day_label = ["Mon","Tue","Wed","Thu","Fri"][col] + f" {day_date.strftime('%-d')}"
+            day_label = ["Mon","Tue","Wed","Thu","Fri"][col] + f" {day_date.day}"
         else:
             sat = monday + timedelta(days=5)
             sun = monday + timedelta(days=6)
-            day_label = f"Sa {sat.strftime('%-d')}/Su {sun.strftime('%-d')}"
+            day_label = f"Sa {sat.day}/Su {sun.day}"
         draw.text((x0+3, COL_TOP+4), day_label, font=f_tiny, fill=hdr_text_fill)
 
     # ── DATE → COLUMN HELPER ─────────────────────
@@ -143,7 +143,8 @@ def render():
         max_chars = max(1, (span_w - 8) // 7)
         lines     = textwrap.wrap(task["name"], width=max_chars)
         line_count = min(2, len(lines))
-        box_h = max(14 + line_count * 13 + 14, TASK_H - 2)
+        class_name = task.get("class", "")
+        box_h = max(14 + line_count * 13 + 14 + (13 if class_name else 0), TASK_H - 2)
 
         draw.rectangle([x0_task, task_y, x1_task, task_y+box_h], outline=0, fill=1)
 
@@ -151,6 +152,9 @@ def render():
         for line in lines[:2]:
             draw.text((x0_task+4, y_text), line, font=f_small, fill=0)
             y_text += 14
+        if class_name:
+            draw.text((x0_task+4, y_text), class_name[:max_chars], font=f_tiny, fill=0)
+            y_text += 13
         sym = STATUS_SYMBOLS.get(task["status"], "○")
         draw.text((x0_task+4, y_text+1), f"{sym} {task['status']}", font=f_tiny, fill=0)
 
@@ -225,7 +229,7 @@ def render():
             due_label = ("overdue" if days_left < 0 else
                          "today"   if days_left == 0 else
                          "tmrw"    if days_left == 1 else
-                         task["due"].strftime("%-m/%-d"))
+                         f"{task['due'].month}/{task['due'].day}")
             draw.text((text_x, task_y+27), due_label, font=f_tiny, fill=0)
         task_y += PANEL_TASK_H + 1
 

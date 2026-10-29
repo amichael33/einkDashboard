@@ -4,7 +4,10 @@ import os
 import sys
 import time
 from PIL import ImageFont
-from config import WAVESHARE_LIB, PREVIEW_PATH, ERROR_PATH
+from config import (
+    WAVESHARE_LIB, PREVIEW_PATH, ERROR_PATH,
+    SAVE_SAMPLE_IMAGES, SAMPLE_IMAGES_DIR,
+)
 
 
 #  FONTS
@@ -46,10 +49,27 @@ def draw_screen_indicator(draw, screen_num, f_tiny, width, height):
             draw.ellipse([cx-DOT_R, base_y-DOT_R, cx+DOT_R, base_y+DOT_R], outline=0, fill=1)
 
 
+#  SAMPLE IMAGES
+
+def save_sample(img, name):
+    """Save a PNG of the screen to sample_images/ when SAVE_SAMPLE_IMAGES is on."""
+    if not SAVE_SAMPLE_IMAGES:
+        return
+    try:
+        os.makedirs(SAMPLE_IMAGES_DIR, exist_ok=True)
+        path = os.path.join(SAMPLE_IMAGES_DIR, f"{name}.png")
+        img.save(path)
+        print(f"  saved sample → {path}")
+    except Exception as e:
+        print(f"⚠ Could not save sample image: {e}")
+
+
 #  PUSH TO DISPLAY
 
-def push(img):
+def push(img, name="screen"):
     """Send a Pillow image to the Waveshare 7.5" V2 display."""
+    save_sample(img, name)
+
     def _try_push():
         sys.path.insert(0, WAVESHARE_LIB)
         from waveshare_epd import epd7in5_V2
@@ -63,6 +83,7 @@ def push(img):
         _try_push()
         print("✓ Display updated.")
     except ImportError:
+        os.makedirs(os.path.dirname(PREVIEW_PATH), exist_ok=True)
         img.save(PREVIEW_PATH)
         print(f"⚠ Waveshare lib not found — saved preview to {PREVIEW_PATH}")
     except Exception as e:
@@ -80,6 +101,7 @@ def push(img):
                 pass
 
         print(f"✗ Display error: {e}")
+        os.makedirs(os.path.dirname(ERROR_PATH), exist_ok=True)
         img.save(ERROR_PATH)
         raise
 
@@ -91,7 +113,7 @@ def render_sleep_screen(central, width, height):
     from datetime import datetime
     img  = Image.new("1", (width, height), 1)
     draw = ImageDraw.Draw(img)
-    t    = datetime.now(central).strftime("%-I:%M %p")
+    t    = datetime.now(central).strftime("%I:%M %p").lstrip("0")
     f    = load_font(14)
     draw.text((10, 10), t, font=f, fill=0)
     return img

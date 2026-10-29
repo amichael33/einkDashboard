@@ -10,3 +10,6 @@ __pycache__/
 
 # Generated previews
 *_preview.png
+
+# Sample screen PNGs (SAVE_SAMPLE_IMAGES in config.py)
+sample_images/

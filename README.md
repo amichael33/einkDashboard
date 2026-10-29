@@ -41,8 +41,8 @@ A Raspberry Pi-powered e-ink display dashboard that syncs with Notion to show a 
 
 ## Notion databases
 
-### Homework
-- **Name** — task name
+### Homework (e.g. a college "Assignments" database)
+- **Assignment Name** (or **Name**) — assignment title
 - **Status** — Not started / In progress / Done
 - **Due date** — used to place the item in the correct day column
 

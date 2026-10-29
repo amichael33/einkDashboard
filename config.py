@@ -4,6 +4,11 @@
 # config_local.py (see config_local.example.py), looked up in this repo folder
 # first and then in EINK_HOME. Environment variables override both.
 
+#  SAMPLE IMAGES
+# True  -> also save a PNG of every screen shown to sample_images/ (gitignored)
+# False -> don't save PNGs
+SAVE_SAMPLE_IMAGES = True
+
 import os
 import importlib.util
 try:
@@ -16,6 +21,7 @@ REPO_DIR  = os.path.dirname(os.path.abspath(__file__))
 # Folder on the Pi holding credentials.json, token.json, config_local.py and previews
 BASE_DIR  = os.environ.get("EINK_HOME", os.path.expanduser("~/Desktop/eink"))
 ICONS_DIR = os.path.join(REPO_DIR, "icons")
+SAMPLE_IMAGES_DIR = os.path.join(REPO_DIR, "sample_images")
 
 
 def _load_local():
