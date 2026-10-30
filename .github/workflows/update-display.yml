@@ -3,7 +3,9 @@ name: Update E-Ink Display
 on:
   push:
     branches: [main]
-  schedule:
+  # Schedule disabled — uncomment "schedule:" and the cron lines to re-enable.
+  # (An empty "schedule:" makes GitHub reject the whole workflow.)
+  # schedule:
     # Hourly 6am–11pm Central (UTC-5 in winter, UTC-6 in summer)
     # Using UTC-5 (CST) — adjust +1hr for CDT if needed
     # - cron: '0 11 * * *'   # 6am Central
