@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: pip3 install requests pillow --break-system-packages --quiet
+        run: pip3 install requests pillow google-api-python-client google-auth-oauthlib --break-system-packages --quiet
 
       - name: Run dashboard
         run: python3 dashboard.py

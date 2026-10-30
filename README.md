@@ -84,7 +84,7 @@ git clone https://github.com/waveshare/e-Paper.git
 
 ### 3. Install Python dependencies
 ```bash
-pip3 install requests pillow RPi.GPIO spidev --break-system-packages
+pip3 install requests pillow RPi.GPIO spidev google-api-python-client google-auth-oauthlib --break-system-packages
 ```
 
 ### 4. Configure credentials
@@ -101,7 +101,17 @@ To get the Notion values:
 - Share both databases with the integration
 - Copy the DB ID from each database's URL (the 32-char string before `?v=`)
 
-### 5. Set up the GitHub Actions self-hosted runner
+### 5. Sign in to Google Calendar (calendar screen)
+1. In Google Cloud, create an OAuth client of type **Desktop app** with the Calendar API enabled, download it as `credentials.json`, and put it in `~/Desktop/eink/`.
+2. Under **Google Auth Platform → Audience**, set the publishing status to **In production**. While it's in *Testing*, the sign-in expires every 7 days.
+3. Sign in once (opens a browser and saves `~/Desktop/eink/token.json`):
+   ```bash
+   python3 gcal.py --login
+   ```
+   No browser on the Pi? Run it on another computer and copy `token.json` over.
+4. List the calendars to show by name in `CALENDARS_TO_SHOW` in `config_local.py`. `python3 gcal.py` prints this week's events to check it works.
+
+### 6. Set up the GitHub Actions self-hosted runner
 ```bash
 mkdir ~/actions-runner && cd ~/actions-runner
 curl -o actions-runner-linux-arm64-2.332.0.tar.gz -L \
@@ -124,6 +134,7 @@ sudo ./svc.sh start
 ├── config_local.example.py             # template for your private settings
 ├── display.py                          # Waveshare driver / preview output
 ├── notion.py                           # Notion API helpers
+├── gcal.py                             # Google Calendar sign-in + events
 ├── screens/                            # one module per screen
 ├── icons/                              # weather and moon icons
 ├── .github/
