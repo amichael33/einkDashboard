@@ -1,21 +1,20 @@
-# E-Ink Dashboard -- need to update
+# E-Ink Dashboard
 
-A Raspberry Pi-powered e-ink display dashboard that syncs with Notion to show a weekly homework view, priority tasks, and daily progress — refreshed automatically throughout the day.
-
-[Waveshare Page](https://www.waveshare.com/7.5inch-e-Paper-HAT.htm)
-
-[Waveshare Wiki](www.waveshare.com/wiki/7.5inch_e-Paper_HAT)
-
-[Waveshare Wiki Raspberry Pi](www.waveshare.com/wiki/7.5inch_e-Paper_HAT_Manual#Working_With_Raspberry_Pi)
+A Raspberry Pi–powered 7.5" e-ink dashboard for college life: this week's assignments, priority tasks, countdowns, Google Calendar and the weather — switched between with a small USB keypad.
 
 ---
 
-## What it shows
+## Screens
 
-- **Header** — current date (Central time) and a quote of the day
-- **Progress bars** — Week (circles), Month (bar), and Year (bar)
-- **Homework columns** — 6-column week view (Mon–Fri + Sat/Sun merged) pulled from a Notion database, each item showing its name and status
-- **Tasks panel** — right-side panel showing high-priority "Do First" tasks from a separate Notion database, with checkbox states indicating progress
+| Key | Screen | What it shows | Data source |
+|---|---|---|---|
+| 1 | **Homework** | Week progress (week / month / year), a Mon–Fri + weekend column view of this week's unfinished assignments with their class and status, a "Do First" task panel, and up to 5 countdowns | Notion |
+| 2 | **Calendar** | Mon–Sun week grid of events: all-day bars on top, then timed events with start times; `+N more` when a day overflows | Google Calendar |
+| 3 | Goals | *Placeholder — coming soon* | — |
+| 4 | **Weather** | Current temperature and "feels like", sunrise/sunset, wind, humidity, pressure, UV, visibility, air quality, and a 7-day forecast | [Open-Meteo](https://open-meteo.com) (no API key) |
+| 5 | Photos | *Placeholder — coming soon* | — |
+
+If a data source can't be reached (not signed in, offline, missing library), the screen still draws and shows a short message instead of crashing.
 
 ---
 
@@ -23,47 +22,52 @@ A Raspberry Pi-powered e-ink display dashboard that syncs with Notion to show a 
 
 | Component | Details |
 |---|---|
-| Display | Waveshare 7.5" E-Ink HAT (B&W, V2, 800×480) |
+| Display | [Waveshare 7.5" e-Paper HAT](https://www.waveshare.com/7.5inch-e-Paper-HAT.htm) (B&W, V2, 800×480) |
 | Computer | Raspberry Pi 4 |
 | Connection | SPI |
+| Controls | USB keypad (sends `0`–`9`, `a`, `b`, `Enter`) |
+
+Waveshare docs: [wiki](https://www.waveshare.com/wiki/7.5inch_e-Paper_HAT) · [Raspberry Pi guide](https://www.waveshare.com/wiki/7.5inch_e-Paper_HAT_Manual#Working_With_Raspberry_Pi)
+
+---
+
+## Controls
+
+| Key | Action |
+|---|---|
+| `1`–`5` | Switch to that screen |
+| `Enter` | Re-render the current screen |
+| `b` | Jump to the photos screen |
+
+While running, the dashboard also re-renders the current screen every 30 minutes. Without the `keyboard` library it renders once and exits.
 
 ---
 
 ## How it works
 
-1. A Python script (`dashboard.py`) queries two Notion databases via the Notion API
-2. It fetches a quote of the day from [ZenQuotes](https://zenquotes.io)
-3. It renders everything to an 800×480 1-bit bitmap using Pillow
-4. The image is pushed to the e-ink display via the Waveshare Python library
-5. A GitHub Actions self-hosted runner on the Pi triggers the script on a schedule and on every push to `main`
+1. `dashboard.py` renders the current screen to an 800×480 1-bit image with Pillow.
+2. Each screen pulls its own data: `notion.py` (homework, tasks, countdowns), `gcal.py` (calendar), Open-Meteo (weather).
+3. `display.py` pushes the image to the e-ink panel with the Waveshare library. On a computer without the panel, it saves a preview PNG instead.
+4. A GitHub Actions self-hosted runner on the Pi runs the dashboard on every push to `main`, so pushing code deploys it. (A scheduled refresh is included in the workflow but commented out.)
 
 ---
 
 ## Notion databases
 
-### Homework (e.g. a college "Assignments" database)
-- **Assignment Name** (or **Name**) — assignment title
-- **Status** — Not started / In progress / Done
-- **Due date** — used to place the item in the correct day column
+Share each database with your Notion integration (database **⋯ → Connections**), including any database it links to.
 
-### Tasks
-- **Name** — task name
-- **Status** — Inbox / Next Action / In progress / Completed
-- **Due Date** — optional
-- **Eisenhower Status** — formula-based priority label; only "1. Do" items are shown
+**Homework** — e.g. a college "Assignments" database
+- **Assignment Name** (or **Name**) — title
+- **Status** — Not started / In progress / Done (Done is hidden)
+- **Due date** — places the assignment in its day column; date ranges span columns
+- **Class** *(optional)* — relation to a Courses database; shows that course's short `class` code (e.g. "CS 311"), or its `Course Name`
 
----
+**Tasks**
+- **Name**, **Status** (Inbox / Next Action / In progress / Completed), **Due Date** *(optional)*
+- **Eisenhower Status** — formula; only "1. Do" tasks due within 30 days are shown
 
-## Refresh schedule
-
-| Time (Central) | Trigger |
-|---|---|
-| 12:00 AM | Scheduled |
-| 8:30 AM | Scheduled |
-| 12:00 PM | Scheduled |
-| 4:00 PM | Scheduled |
-| 6:30 PM | Scheduled |
-| Any push to `main` | On commit |
+**Countdowns**
+- **Countdown** (title), **Date**, **Mode** (select; only "Days Until" is shown), **done** (checkbox)
 
 ---
 
@@ -76,71 +80,82 @@ sudo raspi-config
 sudo reboot
 ```
 
-### 2. Clone the Waveshare library
+### 2. Clone the Waveshare library and this repo
 ```bash
 cd ~
 git clone https://github.com/waveshare/e-Paper.git
+git clone https://github.com/amichael33/einkDashboard.git ~/Desktop/eink
 ```
 
 ### 3. Install Python dependencies
 ```bash
-pip3 install requests pillow RPi.GPIO spidev google-api-python-client google-auth-oauthlib --break-system-packages
+pip3 install requests pillow RPi.GPIO spidev keyboard google-api-python-client google-auth-oauthlib --break-system-packages
 ```
+The `keyboard` library reads the keypad and usually needs the dashboard to run with `sudo`. If so, install the packages with `sudo pip3 …` too, since root uses its own packages.
 
-### 4. Configure credentials
-Secrets never go in the repo. Copy the example config into the data folder on the Pi (`~/Desktop/eink` by default, or set `EINK_HOME`) and fill it in:
+### 4. Add your private settings
+Secrets never go in the repo. Copy the template into the data folder (`~/Desktop/eink` by default, or set `EINK_HOME`) and fill it in:
 ```bash
-mkdir -p ~/Desktop/eink
 cp config_local.example.py ~/Desktop/eink/config_local.py
 nano ~/Desktop/eink/config_local.py
 ```
-`config_local.py` is gitignored, and environment variables with the same names (e.g. `NOTION_TOKEN`) override it. Put your Google Calendar `credentials.json` (and the generated `token.json`) in the same folder.
+It holds your Notion token and database IDs, the Google calendars to show, and optionally your weather location (default: Houston). `config_local.py`, `credentials.json` and `token.json` are gitignored, and environment variables with the same names (e.g. `NOTION_TOKEN`) override the file.
 
 To get the Notion values:
-- Create an integration at [notion.so/my-integrations](https://www.notion.so/my-integrations)
-- Share both databases with the integration
-- Copy the DB ID from each database's URL (the 32-char string before `?v=`)
+- Create an integration at [notion.so/my-integrations](https://www.notion.so/my-integrations) and copy its secret
+- Connect the integration to each database (see above)
+- Copy each database ID from its URL (the 32-character string before `?v=`)
 
-### 5. Sign in to Google Calendar (calendar screen)
-1. In Google Cloud, create an OAuth client of type **Desktop app** with the Calendar API enabled, download it as `credentials.json`, and put it in `~/Desktop/eink/`.
+### 5. Sign in to Google Calendar
+1. In Google Cloud, enable the Calendar API, create an OAuth client of type **Desktop app**, download it as `credentials.json`, and put it in `~/Desktop/eink/`.
 2. Under **Google Auth Platform → Audience**, set the publishing status to **In production**. While it's in *Testing*, the sign-in expires every 7 days.
-3. Sign in once (opens a browser and saves `~/Desktop/eink/token.json`):
+3. Sign in once. This opens a browser and saves `~/Desktop/eink/token.json`:
    ```bash
    python3 gcal.py --login
    ```
    No browser on the Pi? Run it on another computer and copy `token.json` over.
-4. List the calendars to show by name in `CALENDARS_TO_SHOW` in `config_local.py`. `python3 gcal.py` prints this week's events to check it works.
+4. List the calendars to show by name in `CALENDARS_TO_SHOW`. Check it works with:
+   ```bash
+   python3 gcal.py
+   ```
 
-### 6. Set up the GitHub Actions self-hosted runner
+### 6. Run it
 ```bash
-mkdir ~/actions-runner && cd ~/actions-runner
-curl -o actions-runner-linux-arm64-2.332.0.tar.gz -L \
-  https://github.com/actions/runner/releases/download/v2.332.0/actions-runner-linux-arm64-2.332.0.tar.gz
-tar xzf ./actions-runner-linux-arm64-2.332.0.tar.gz
-./config.sh --url https://github.com/YOUR_USERNAME/YOUR_REPO --token YOUR_TOKEN
+cd ~/Desktop/eink
+sudo python3 dashboard.py
+```
+
+### 7. (Optional) Deploy on push with a self-hosted runner
+In your repo: **Settings → Actions → Runners → New self-hosted runner**, choose Linux / ARM64, and follow the commands it shows. Then install it as a service:
+```bash
+cd ~/actions-runner
 sudo ./svc.sh install
 sudo ./svc.sh start
 ```
 
-> **Public repo?** The workflow only runs on pushes to `main` and on a schedule, never on pull requests, so outside contributors can't run code on your Pi. Keep it that way, and under **Settings → Actions → General** set fork pull request workflows to require approval.
+> **Public repo?** The workflow only runs on pushes to `main`, never on pull requests. Still, under **Settings → Actions → General**, set fork pull request workflows to **Require approval for all external contributors**, so nobody else's code can run on your Pi.
+
+---
+
+## Previewing screens without the Pi
+
+Set `SAVE_SAMPLE_IMAGES = True` at the top of `config.py` to also save a PNG of every screen to `sample_images/` (gitignored), e.g. `1_homework.png`, `2_calendar.png`. Screens render on any computer; fonts fall back to a basic one when the Pi's DejaVu fonts aren't installed.
 
 ---
 
 ## File structure
 ```
 .
-├── dashboard.py                        # main script
-├── config.py                           # constants; loads config_local.py
-├── config_local.example.py             # template for your private settings
-├── display.py                          # Waveshare driver / preview output
-├── notion.py                           # Notion API helpers
-├── gcal.py                             # Google Calendar sign-in + events
-├── screens/                            # one module per screen
-├── icons/                              # weather and moon icons
-├── .github/
-│   └── workflows/
-│       └── update-display.yml          # GitHub Actions schedule
-└── README.md
+├── dashboard.py              # entry point: keypad, screen switching, auto-refresh
+├── config.py                 # constants + SAVE_SAMPLE_IMAGES; loads config_local.py
+├── config_local.example.py   # template for your private settings
+├── display.py                # fonts, drawing helpers, push to e-ink / preview PNG
+├── notion.py                 # Notion: homework, tasks, countdowns
+├── gcal.py                   # Google Calendar: sign-in + this week's events
+├── screens/                  # one module per screen (homework, calendar, goals, weather, photos)
+├── icons/                    # weather and moon icons
+└── .github/workflows/
+    └── update-display.yml    # runs the dashboard on the Pi on push
 ```
 
 ---
@@ -148,7 +163,7 @@ sudo ./svc.sh start
 ## Dependencies
 
 - [Pillow](https://python-pillow.org/) — image rendering
-- [Requests](https://requests.readthedocs.io/) — Notion + ZenQuotes API calls
+- [Requests](https://requests.readthedocs.io/) — Notion and Open-Meteo API calls
+- [Google API Python client](https://github.com/googleapis/google-api-python-client) + [google-auth-oauthlib](https://github.com/googleapis/google-auth-library-python-oauthlib) — Google Calendar
+- [keyboard](https://github.com/boppreh/keyboard) — USB keypad input
 - [Waveshare e-Paper library](https://github.com/waveshare/e-Paper) — display driver
-- [ZenQuotes API](https://zenquotes.io) — daily quote
-- [Notion API](https://developers.notion.com) — homework and task data

@@ -18,8 +18,10 @@ except ImportError:
 
 #  PATHS
 REPO_DIR  = os.path.dirname(os.path.abspath(__file__))
+# Home of the real user, even under sudo (where "~" would be /root)
+HOME_DIR  = os.path.expanduser("~" + os.environ.get("SUDO_USER", ""))
 # Folder on the Pi holding credentials.json, token.json, config_local.py and previews
-BASE_DIR  = os.environ.get("EINK_HOME", os.path.expanduser("~/Desktop/eink"))
+BASE_DIR  = os.environ.get("EINK_HOME", os.path.join(HOME_DIR, "Desktop", "eink"))
 ICONS_DIR = os.path.join(REPO_DIR, "icons")
 SAMPLE_IMAGES_DIR = os.path.join(REPO_DIR, "sample_images")
 
@@ -80,6 +82,6 @@ LONGITUDE = float(_setting("LONGITUDE", -95.3698))
 LOCATION  = _setting("LOCATION", "Houston, Texas")
 
 #  WAVESHARE LIB PATH
-WAVESHARE_LIB = _setting("WAVESHARE_LIB", os.path.expanduser("~/e-Paper/lib"))
+WAVESHARE_LIB = _setting("WAVESHARE_LIB", os.path.join(HOME_DIR, "e-Paper", "lib"))
 PREVIEW_PATH  = os.path.join(BASE_DIR, "dashboard_preview.png")
 ERROR_PATH    = os.path.join(BASE_DIR, "dashboard_error_preview.png")
