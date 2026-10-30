@@ -25,7 +25,7 @@ If a data source can't be reached (not signed in, offline, missing library), the
 | Display | [Waveshare 7.5" e-Paper HAT](https://www.waveshare.com/7.5inch-e-Paper-HAT.htm) (B&W, V2, 800×480) |
 | Computer | Raspberry Pi 4 |
 | Connection | SPI |
-| Controls | USB keypad (sends `0`–`9`, `a`, `b`, `Enter`) |
+| Controls | USB keypad (sends `0`–`9`, `a`, `b`, `Enter`); key labels in `buttons.txt` |
 
 Waveshare docs: [wiki](https://www.waveshare.com/wiki/7.5inch_e-Paper_HAT) · [Raspberry Pi guide](https://www.waveshare.com/wiki/7.5inch_e-Paper_HAT_Manual#Working_With_Raspberry_Pi)
 
@@ -36,8 +36,12 @@ Waveshare docs: [wiki](https://www.waveshare.com/wiki/7.5inch_e-Paper_HAT) · [R
 | Key | Action |
 |---|---|
 | `1`–`5` | Switch to that screen |
-| `Enter` | Re-render the current screen |
+| `6` | Display on/off (shows a small clock while off) |
+| `7` | Refresh: re-fetch the data and redraw without clearing the panel first (faster, less flashing) |
+| `8` or `Enter` | Force reset: clear the panel, then redraw |
+| `9` / `0` | Next / previous. A screen can define its own (e.g. paging); otherwise they move between screens |
 | `b` | Jump to the photos screen |
+| `a` | Not used |
 
 While running, the dashboard also re-renders the current screen every 30 minutes. Without the `keyboard` library it renders once and exits.
 

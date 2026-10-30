@@ -3,10 +3,13 @@
 E-Ink Dashboard — main entry point
 Controls via USB keypad. No GPIO required.
 
-Key mapping:
+Key mapping (see buttons.txt):
   1-5       → switch to screen 1-5
-  Enter     → force reset / re-render current screen
-  0         → filter (passed to current screen if supported)
+  6         → display on/off (sleep screen)
+  7         → refresh: re-fetch data and redraw without clearing the panel first
+  8 / Enter → force reset: clear the panel, then re-render
+  9         → next (screen's own on_next if it has one, otherwise next screen)
+  0         → previous (screen's own on_prev if it has one, otherwise previous screen)
   a         → (blank)
   b         → photos
 """
@@ -36,57 +39,59 @@ sleeping       = False
 
 #  RENDER
 
-def refresh_current_screen():
+def refresh_current_screen(clear=True):
     if sleeping:
-        display.push(display.render_sleep_screen(CENTRAL, WIDTH, HEIGHT), "sleep")
+        display.push(display.render_sleep_screen(CENTRAL, WIDTH, HEIGHT), "sleep", clear=clear)
         return
     print(f"→ Rendering screen {current_screen}…")
     try:
         screen = SCREENS[current_screen]
         img    = screen.render()
-        display.push(img, f"{current_screen}_{screen.__name__.split('.')[-1]}")
+        display.push(img, f"{current_screen}_{screen.__name__.split('.')[-1]}", clear=clear)
     except Exception as e:
         print(f"✗ Screen {current_screen} render failed: {e}")
 
 
 #  KEYBOARD HANDLER
 
+def step(direction):
+    """9 / 0: let the screen handle next/previous, else move between screens."""
+    global current_screen
+    hook = getattr(SCREENS[current_screen], "on_next" if direction > 0 else "on_prev", None)
+    if hook:
+        hook()
+        print(f"  → {'Next' if direction > 0 else 'Previous'} (screen {current_screen})")
+    else:
+        current_screen = (current_screen - 1 + direction) % len(SCREENS) + 1
+        print(f"  → {'Next' if direction > 0 else 'Previous'} screen ({current_screen})")
+    refresh_current_screen()
+
 def handle_key(key):
-    global current_screen, auto_refresh, sleeping
+    global current_screen, sleeping
 
     if key in ("1", "2", "3", "4", "5"):
         current_screen = int(key)
         print(f"  → Screen {current_screen}")
         refresh_current_screen()
 
-    elif key == "enter":
+    elif key == "6":
+        sleeping = not sleeping
+        print(f"  → Display {'OFF' if sleeping else 'ON'}")
+        refresh_current_screen()
+
+    elif key == "7":
+        print("  → Refresh")
+        refresh_current_screen(clear=False)
+
+    elif key in ("8", "enter"):
         print("  → Force reset")
         refresh_current_screen()
 
-    elif key == "+":
-        current_screen = (current_screen % len(SCREENS)) + 1
-        print(f"  → Next screen ({current_screen})")
-        refresh_current_screen()
-
-    elif key == "-":
-        current_screen = ((current_screen - 2) % len(SCREENS)) + 1
-        print(f"  → Prev screen ({current_screen})")
-        refresh_current_screen()
-
-    elif key == "*":
-        sleeping = not sleeping
-        print(f"  → Sleep: {'ON' if sleeping else 'OFF'}")
-        refresh_current_screen()
-
-    elif key == "/":
-        auto_refresh = not auto_refresh
-        print(f"  → Auto-refresh: {'ON' if auto_refresh else 'OFF'}")
+    elif key == "9":
+        step(+1)
 
     elif key == "0":
-        screen = SCREENS.get(current_screen)
-        if hasattr(screen, "on_filter"):
-            screen.on_filter()
-            refresh_current_screen()
+        step(-1)
 
     elif key == "b":
         # Dedicated key to jump straight to the photos screen.

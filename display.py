@@ -66,8 +66,11 @@ def save_sample(img, name):
 
 #  PUSH TO DISPLAY
 
-def push(img, name="screen"):
-    """Send a Pillow image to the Waveshare 7.5" V2 display."""
+def push(img, name="screen", clear=True):
+    """Send a Pillow image to the Waveshare 7.5" V2 display.
+
+    clear=False skips wiping the panel first: faster, with less flashing.
+    """
     save_sample(img, name)
 
     def _try_push():
@@ -75,7 +78,8 @@ def push(img, name="screen"):
         from waveshare_epd import epd7in5_V2
         epd = epd7in5_V2.EPD()
         epd.init()
-        epd.Clear()
+        if clear:
+            epd.Clear()
         epd.display(epd.getbuffer(img))
         epd.sleep()
 
